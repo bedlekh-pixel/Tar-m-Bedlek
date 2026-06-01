@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#2D6A4F">
+<title>Bedlek Tarım Defteri</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --cream:#FFF8E7; --paper:#FDF6E3; --paper-2:#F5EFD6;
+  --ink:#1A1A1A; --ink-2:#3D3D3D; --muted:#8A8378;
+  --forest:#2D6A4F; --forest-d:#1B4332; --forest-l:#D8F3DC;
+  --orange:#F77F00; --orange-l:#FFE8D6;
+  --gold:#FCBF49; --gold-l:#FFF3C4;
+  --earth:#9C6644; --earth-l:#EDDCD2;
+  --red:#D62828; --red-l:#FFE3E3;
+  --blue:#4361EE; --blue-l:#E0E7FF;
+  --purple:#7209B7; --purple-l:#F3E8FF;
+  --line:#E8DEC4;
+  --font-display:'Bricolage Grotesque',ui-serif,Georgia,serif;
+  --font-body:'Plus Jakarta Sans',-apple-system,system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','Courier New',monospace;
+  --r-sm:10px; --r:14px; --r-lg:20px; --r-xl:28px;
+  --sh-1:0 1px 2px rgba(60,40,15,.06),0 1px 1px rgba(60,40,15,.04);
+  --sh-2:0 4px 12px rgba(60,40,15,.08),0 2px 4px rgba(60,40,15,.05);
+  --sh-3:0 12px 32px rgba(60,40,15,.12),0 4px 12px rgba(60,40,15,.06);
+}
+html,body{height:100%}
+body{
+  font-family:var(--font-body);background:var(--cream);color:var(--ink);
+  font-size:15px;line-height:1.5;overflow-x:hidden;
+  background-image:
+    radial-gradient(circle at 10% 0%,rgba(252,191,73,.08) 0%,transparent 40%),
+    radial-gradient(circle at 90% 100%,rgba(45,106,79,.06) 0%,transparent 40%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/><feColorMatrix values='0 0 0 0 .55 0 0 0 0 .45 0 0 0 0 .25 0 0 0 .035 0'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>");
+}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--earth);border-radius:99px;opacity:.4}
+::-webkit-scrollbar-track{background:transparent}
+button{font-family:inherit;border:none;background:none;cursor:pointer;color:inherit}
+input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+a{color:inherit;text-decoration:none}
+
+/* === LAYOUT === */
+.app{display:flex;min-height:100vh;position:relative}
+.sidebar{
+  width:240px;flex-shrink:0;background:var(--paper);
+  border-right:1px solid var(--line);padding:24px 0;
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;
+  z-index:50;
+}
+.brand{padding:0 22px 22px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.brand-l{display:flex;align-items:center;gap:10px}
+.brand-icon{
+  width:38px;height:38px;border-radius:12px;
+  background:linear-gradient(135deg,var(--forest) 0%,var(--forest-d) 100%);
+  display:grid;place-items:center;color:#fff;flex-shrink:0;
+  box-shadow:0 4px 12px rgba(45,106,79,.25);
+}
+.brand-t{font-family:var(--font-display);font-weight:700;font-size:18px;letter-spacing:-0.02em;line-height:1.1}
+.brand-s{font-size:11px;color:var(--muted);font-weight:500;margin-top:2px}
+.season-pill{
+  margin:12px 22px 0;padding:6px 12px;background:var(--gold-l);
+  border-radius:99px;font-size:11px;font-weight:600;color:var(--earth);
+  display:inline-flex;align-items:center;gap:6px;
+}
+.season-pill::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--orange);box-shadow:0 0 0 3px rgba(247,127,0,.2)}
+.nav{padding:14px 12px;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto}
+.nav-section{font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--muted);padding:14px 12px 6px;text-transform:uppercase}
+.nav-item{
+  display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:var(--r-sm);
+  font-size:14px;font-weight:500;color:var(--ink-2);cursor:pointer;
+  transition:all .18s cubic-bezier(.4,0,.2,1);position:relative;
+}
+.nav-item:hover{background:rgba(45,106,79,.06);color:var(--ink)}
+.nav-item.active{background:var(--forest);color:#fff;font-weight:600;box-shadow:0 4px 12px rgba(45,106,79,.22)}
+.nav-item.active .nav-icon{color:#fff}
+.nav-icon{width:18px;height:18px;flex-shrink:0;color:var(--muted)}
+.nav-item:hover .nav-icon{color:var(--forest)}
+.nav-item .nav-badge{margin-left:auto;font-size:11px;background:var(--gold-l);color:var(--earth);padding:2px 8px;border-radius:99px;font-weight:700;font-family:var(--font-mono)}
+.nav-item.active .nav-badge{background:rgba(255,255,255,.22);color:#fff}
+.sidebar-foot{padding:12px 22px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+.sb-status{display:flex;align-items:center;gap:6px}
+.sb-dot{width:7px;height:7px;border-radius:50%;background:var(--forest);box-shadow:0 0 0 3px rgba(45,106,79,.18)}
+.sb-dot.off{background:var(--red);box-shadow:0 0 0 3px rgba(214,40,40,.18)}
+
+/* === MAIN === */
+.main{flex:1;min-width:0;padding-bottom:90px}
+.topbar{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:20px 28px;border-bottom:1px solid var(--line);
+  background:rgba(253,246,227,.85);backdrop-filter:saturate(180%) blur(10px);
+  position:sticky;top:0;z-index:20;
+}
+.topbar h1{font-family:var(--font-display);font-size:24px;font-weight:700;letter-spacing:-0.02em;line-height:1}
+.topbar p{font-size:12px;color:var(--muted);margin-top:4px}
+.topbar-r{display:flex;gap:8px;align-items:center}
+.btn{
+  display:inline-flex;align-items:center;gap:7px;padding:9px 14px;
+  border-radius:var(--r-sm);font-size:13px;font-weight:600;cursor:pointer;
+  transition:all .15s;border:1px solid transparent;
+}
+.btn-primary{background:var(--forest);color:#fff;box-shadow:0 4px 12px rgba(45,106,79,.22)}
+.btn-primary:hover{background:var(--forest-d);transform:translateY(-1px);box-shadow:0 6px 16px rgba(45,106,79,.3)}
+.btn-ghost{background:transparent;color:var(--ink-2);border-color:var(--line)}
+.btn-ghost:hover{background:var(--paper-2);border-color:var(--earth)}
+.btn-danger{color:var(--red);border-color:rgba(214,40,40,.25)}
+.btn-danger:hover{background:var(--red-l)}
+.btn-sm{padding:6px 11px;font-size:12px}
+.btn-icon{padding:9px;width:38px;height:38px;justify-content:center}
+
+.content{padding:24px 28px}
+
+/* === CARDS === */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+.stat{
+  background:var(--paper);border-radius:var(--r-lg);padding:18px;
+  box-shadow:var(--sh-1);position:relative;overflow:hidden;
+  transition:transform .2s,box-shadow .2s;cursor:default;
+}
+.stat:hover{transform:translateY(-2px);box-shadow:var(--sh-2)}
+.stat-icon{
+  width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
+  margin-bottom:12px;
+}
+.stat.green .stat-icon{background:var(--forest-l);color:var(--forest)}
+.stat.orange .stat-icon{background:var(--orange-l);color:var(--orange)}
+.stat.gold .stat-icon{background:var(--gold-l);color:var(--earth)}
+.stat.red .stat-icon{background:var(--red-l);color:var(--red)}
+.stat.blue .stat-icon{background:var(--blue-l);color:var(--blue)}
+.stat.purple .stat-icon{background:var(--purple-l);color:var(--purple)}
+.stat-l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:5px}
+.stat-v{font-family:var(--font-mono);font-weight:700;font-size:22px;letter-spacing:-0.02em;line-height:1.1}
+.stat-s{font-size:11px;color:var(--muted);margin-top:6px}
+.stat-deco{position:absolute;right:-20px;top:-20px;width:80px;height:80px;opacity:.08}
+
+.section-head{display:flex;justify-content:space-between;align-items:center;margin:30px 0 14px}
+.section-head h2{font-family:var(--font-display);font-size:20px;font-weight:700;letter-spacing:-0.01em}
+.section-head p{font-size:12px;color:var(--muted)}
+
+/* === GRID === */
+.grid{display:grid;gap:14px}
+.grid-2{grid-template-columns:repeat(2,1fr)}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.grid-4{grid-template-columns:repeat(4,1fr)}
+.grid-auto{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+
+/* === CARD === */
+.card{
+  background:var(--paper);border-radius:var(--r);padding:18px;
+  box-shadow:var(--sh-1);border:1px solid var(--line);
+}
+.card-hover{transition:all .2s;cursor:pointer}
+.card-hover:hover{box-shadow:var(--sh-2);transform:translateY(-2px);border-color:var(--earth)}
+
+/* === HAREKET LIST === */
+.tx-list{display:flex;flex-direction:column;gap:8px}
+.tx{
+  background:var(--paper);border-radius:var(--r);padding:14px 16px;
+  display:grid;grid-template-columns:42px 1fr auto auto;gap:14px;align-items:center;
+  border:1px solid var(--line);box-shadow:var(--sh-1);
+  transition:all .15s;cursor:pointer;
+}
+.tx:hover{box-shadow:var(--sh-2);border-color:var(--earth);transform:translateX(2px)}
+.tx-ico{
+  width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
+  background:var(--forest-l);color:var(--forest);
+}
+.tx.gider .tx-ico{background:var(--red-l);color:var(--red)}
+.tx.gelir .tx-ico{background:var(--forest-l);color:var(--forest)}
+.tx.borc .tx-ico{background:var(--purple-l);color:var(--purple)}
+.tx.hammadde .tx-ico{background:var(--gold-l);color:var(--earth)}
+.tx-main{min-width:0}
+.tx-t{font-weight:600;font-size:14px;color:var(--ink);margin-bottom:2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tx-s{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx-amt{font-family:var(--font-mono);font-weight:700;font-size:15px;text-align:right;white-space:nowrap}
+.tx-amt.gider{color:var(--red)}
+.tx-amt.gelir{color:var(--forest)}
+.tx-amt-sub{font-size:11px;color:var(--muted);font-weight:500;margin-top:2px;text-align:right}
+.tx-date{font-size:12px;color:var(--muted);font-family:var(--font-mono);white-space:nowrap;text-align:right;min-width:62px}
+.chip{display:inline-block;font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;background:var(--paper-2);color:var(--earth);letter-spacing:.02em}
+.chip.green{background:var(--forest-l);color:var(--forest)}
+.chip.orange{background:var(--orange-l);color:var(--orange)}
+.chip.gold{background:var(--gold-l);color:var(--earth)}
+.chip.purple{background:var(--purple-l);color:var(--purple)}
+.chip.blue{background:var(--blue-l);color:var(--blue)}
+.chip.red{background:var(--red-l);color:var(--red)}
+
+/* === TARLA CARD === */
+.tarla-card{
+  background:linear-gradient(135deg,var(--paper) 0%,var(--paper-2) 100%);
+  border-radius:var(--r-lg);padding:20px;
+  border:1px solid var(--line);box-shadow:var(--sh-1);
+  transition:all .2s;cursor:pointer;position:relative;overflow:hidden;
+}
+.tarla-card:hover{box-shadow:var(--sh-3);transform:translateY(-3px)}
+.tarla-card::after{
+  content:'';position:absolute;right:-30px;bottom:-30px;width:120px;height:120px;
+  background:radial-gradient(circle,var(--forest) 0%,transparent 70%);opacity:.08;
+}
+.tarla-h{display:flex;justify-content:space-between;align-items:start;margin-bottom:14px}
+.tarla-ad{font-family:var(--font-display);font-size:17px;font-weight:700;line-height:1.2;letter-spacing:-0.01em}
+.tarla-sahip{font-size:12px;color:var(--muted);margin-top:3px}
+.tarla-dekar{
+  background:var(--forest);color:#fff;padding:5px 11px;border-radius:99px;
+  font-family:var(--font-mono);font-weight:700;font-size:12px;flex-shrink:0;
+}
+.tarla-meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.tarla-cost{
+  display:flex;justify-content:space-between;align-items:flex-end;
+  padding-top:12px;border-top:1px dashed var(--line);
+}
+.tarla-cost-l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.tarla-cost-v{font-family:var(--font-mono);font-weight:700;font-size:17px;color:var(--red)}
+.tarla-dekar-cost{font-size:11px;color:var(--muted);margin-top:2px;font-family:var(--font-mono)}
+
+/* === FIRMA CARD === */
+.firma-card{
+  background:var(--paper);border-radius:var(--r-lg);padding:22px;
+  border:1px solid var(--line);box-shadow:var(--sh-1);
+  position:relative;overflow:hidden;
+}
+.firma-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:5px;
+  background:linear-gradient(90deg,var(--orange) 0%,var(--gold) 100%);
+}
+.firma-h{margin-bottom:18px}
+.firma-ad{font-family:var(--font-display);font-size:20px;font-weight:700;letter-spacing:-0.01em}
+.firma-urun{font-size:12px;color:var(--muted);margin-top:3px}
+.firma-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.firma-stat{padding:12px;background:var(--paper-2);border-radius:var(--r-sm);text-align:center}
+.firma-stat-l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:4px}
+.firma-stat-v{font-family:var(--font-mono);font-weight:700;font-size:14px}
+.firma-stat-v.green{color:var(--forest)}
+.firma-stat-v.red{color:var(--red)}
+.firma-stat-v.orange{color:var(--orange)}
+
+/* === KISI === */
+.kisi-card{
+  background:var(--paper);border-radius:var(--r);padding:16px;
+  border:1px solid var(--line);box-shadow:var(--sh-1);
+  display:flex;align-items:center;gap:14px;transition:all .15s;cursor:pointer;
+}
+.kisi-card:hover{box-shadow:var(--sh-2);border-color:var(--earth)}
+.kisi-av{
+  width:44px;height:44px;border-radius:50%;flex-shrink:0;
+  background:linear-gradient(135deg,var(--gold) 0%,var(--orange) 100%);
+  color:#fff;font-family:var(--font-display);font-weight:700;font-size:18px;
+  display:grid;place-items:center;text-transform:uppercase;
+}
+.kisi-av.aile{background:linear-gradient(135deg,var(--forest) 0%,var(--forest-d) 100%)}
+.kisi-av.tedarikci{background:linear-gradient(135deg,var(--blue) 0%,var(--purple) 100%)}
+.kisi-info{flex:1;min-width:0}
+.kisi-ad{font-weight:600;font-size:14px;line-height:1.2;margin-bottom:3px}
+.kisi-tur{font-size:11px;color:var(--muted);text-transform:capitalize}
+.kisi-bakiye{font-family:var(--font-mono);font-weight:700;font-size:14px;text-align:right;white-space:nowrap}
+.kisi-bakiye.alacak{color:var(--forest)}
+.kisi-bakiye.borc{color:var(--red)}
+
+/* === FAB === */
+.fab{
+  position:fixed;right:24px;bottom:24px;width:60px;height:60px;
+  border-radius:50%;background:linear-gradient(135deg,var(--orange) 0%,var(--red) 100%);
+  color:#fff;display:grid;place-items:center;cursor:pointer;
+  box-shadow:0 8px 24px rgba(247,127,0,.4),0 4px 8px rgba(247,127,0,.2);
+  z-index:100;transition:all .2s;
+}
+.fab:hover{transform:scale(1.08) rotate(90deg);box-shadow:0 12px 28px rgba(247,127,0,.5)}
+.fab:active{transform:scale(.96)}
+
+/* === TOOLBAR === */
+.toolbar{
+  background:var(--paper);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;
+  display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+  border:1px solid var(--line);box-shadow:var(--sh-1);
+}
+.search-w{flex:1;min-width:200px;position:relative}
+.search-w svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);width:16px;height:16px;pointer-events:none}
+.search{
+  width:100%;padding:9px 12px 9px 38px;background:var(--paper-2);
+  border:1px solid var(--line);border-radius:var(--r-sm);font-size:13px;
+  outline:none;transition:all .15s;
+}
+.search:focus{border-color:var(--forest);background:var(--cream);box-shadow:0 0 0 3px rgba(45,106,79,.1)}
+.select{
+  padding:9px 30px 9px 12px;background:var(--paper-2);border:1px solid var(--line);
+  border-radius:var(--r-sm);font-size:13px;outline:none;cursor:pointer;
+  appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' viewBox='0 0 12 12'><path d='M3 4.5L6 7.5L9 4.5' stroke='%238A8378' stroke-width='1.5' stroke-linecap='round'/></svg>");
+  background-position:right 10px center;background-repeat:no-repeat;
+}
+.select:focus{border-color:var(--forest);background-color:var(--cream)}
+
+/* === MODAL === */
+.overlay{
+  display:none;position:fixed;inset:0;background:rgba(20,15,8,.55);z-index:200;
+  justify-content:center;align-items:flex-end;padding:0;
+  backdrop-filter:blur(4px);overflow-y:auto;
+}
+.overlay.open{display:flex;animation:fadeIn .2s}
+.modal{
+  background:var(--paper);border-radius:var(--r-xl) var(--r-xl) 0 0;
+  width:100%;max-width:560px;box-shadow:0 -10px 40px rgba(0,0,0,.2);
+  margin:auto auto 0;animation:slideUp .3s cubic-bezier(.2,.9,.3,1);
+  max-height:92vh;display:flex;flex-direction:column;
+}
+@media(min-width:640px){
+  .overlay{align-items:center;padding:24px}
+  .modal{border-radius:var(--r-xl);margin:auto;max-height:88vh}
+}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.m-handle{width:36px;height:4px;background:var(--line);border-radius:99px;margin:10px auto 0;flex-shrink:0}
+@media(min-width:640px){.m-handle{display:none}}
+.m-head{padding:18px 24px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:start;gap:12px;flex-shrink:0}
+.m-title{font-family:var(--font-display);font-size:20px;font-weight:700;line-height:1.2;letter-spacing:-0.01em}
+.m-sub{font-size:12px;color:var(--muted);margin-top:3px}
+.m-close{
+  width:34px;height:34px;border-radius:10px;background:var(--paper-2);
+  display:grid;place-items:center;flex-shrink:0;transition:all .15s;
+}
+.m-close:hover{background:var(--red-l);color:var(--red)}
+.m-body{padding:20px 24px;overflow-y:auto;flex:1}
+.m-foot{padding:16px 24px;border-top:1px solid var(--line);display:flex;gap:10px;justify-content:flex-end;flex-shrink:0;background:var(--paper-2);border-radius:0 0 var(--r-xl) var(--r-xl)}
+
+/* === FORM === */
+.field{margin-bottom:16px}
+.field-l{font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:6px;display:block}
+.field-l .req{color:var(--red);margin-left:2px}
+.input,.textarea{
+  width:100%;padding:11px 13px;background:var(--cream);
+  border:1.5px solid var(--line);border-radius:var(--r-sm);
+  font-size:14px;outline:none;transition:all .15s;color:var(--ink);
+}
+.input:focus,.textarea:focus{border-color:var(--forest);background:#fff;box-shadow:0 0 0 3px rgba(45,106,79,.1)}
+.textarea{resize:vertical;min-height:70px;font-family:inherit}
+.input[type='date']{font-family:var(--font-mono);font-size:13px}
+
+.tur-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:18px}
+@media(min-width:480px){.tur-grid{grid-template-columns:repeat(3,1fr)}}
+.tur-opt input{display:none}
+.tur-opt label{
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  padding:12px 6px;border:1.5px solid var(--line);border-radius:var(--r-sm);
+  cursor:pointer;transition:all .15s;background:var(--paper);
+  font-size:12px;font-weight:600;color:var(--ink-2);text-align:center;
+}
+.tur-opt label svg{width:22px;height:22px;color:var(--muted);transition:all .15s}
+.tur-opt label:hover{border-color:var(--earth);background:var(--paper-2)}
+.tur-opt input:checked+label{background:var(--forest);color:#fff;border-color:var(--forest);transform:translateY(-1px);box-shadow:0 4px 12px rgba(45,106,79,.22)}
+.tur-opt input:checked+label svg{color:#fff}
+.tur-opt.harcama input:checked+label,.tur-opt.gider input:checked+label{background:var(--red);border-color:var(--red);box-shadow:0 4px 12px rgba(214,40,40,.22)}
+.tur-opt.gelir input:checked+label,.tur-opt.avans input:checked+label{background:var(--forest);border-color:var(--forest)}
+.tur-opt.hammadde input:checked+label{background:var(--earth);border-color:var(--earth);box-shadow:0 4px 12px rgba(156,102,68,.22)}
+.tur-opt.borc input:checked+label{background:var(--purple);border-color:var(--purple);box-shadow:0 4px 12px rgba(114,9,183,.22)}
+.tur-opt.hasat input:checked+label{background:var(--gold);border-color:var(--gold);color:var(--ink);box-shadow:0 4px 12px rgba(252,191,73,.32)}
+.tur-opt.hasat input:checked+label svg{color:var(--ink)}
+
+.row{display:grid;gap:12px}
+.row-2{grid-template-columns:1fr 1fr}
+@media(max-width:480px){.row-2{grid-template-columns:1fr}}
+
+.hint{font-size:11px;color:var(--muted);margin-top:4px;font-style:italic}
+
+/* === DETAY === */
+.detail-h{
+  display:flex;flex-direction:column;gap:6px;padding:18px 0;
+  border-bottom:1px dashed var(--line);margin-bottom:18px;
+}
+.detail-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:14px}
+.detail-row+.detail-row{border-top:1px solid var(--line)}
+.detail-l{color:var(--muted);font-size:13px}
+.detail-v{font-weight:600;text-align:right}
+.detail-v.mono{font-family:var(--font-mono)}
+
+/* === MOBILE NAV === */
+.mob-nav{
+  display:none;position:fixed;bottom:0;left:0;right:0;
+  background:var(--paper);border-top:1px solid var(--line);
+  z-index:90;padding:8px 4px env(safe-area-inset-bottom,8px);
+  justify-content:space-around;align-items:center;
+  box-shadow:0 -4px 16px rgba(60,40,15,.06);
+}
+.mob-tab{
+  display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 10px;
+  font-size:10px;font-weight:600;color:var(--muted);border-radius:10px;
+  transition:all .15s;flex:1;
+}
+.mob-tab.active{color:var(--forest)}
+.mob-tab svg{width:22px;height:22px}
+.mob-tab.fab-tab{
+  background:linear-gradient(135deg,var(--orange) 0%,var(--red) 100%);color:#fff;
+  width:54px;height:54px;border-radius:50%;margin-top:-22px;flex:0 0 auto;
+  box-shadow:0 6px 18px rgba(247,127,0,.4);
+}
+.mob-tab.fab-tab svg{width:28px;height:28px}
+
+@media(max-width:900px){
+  .sidebar{display:none}
+  .mob-nav{display:flex}
+  .main{padding-bottom:90px}
+  .topbar{padding:14px 16px}
+  .topbar h1{font-size:20px}
+  .content{padding:16px}
+  .stats{grid-template-columns:repeat(2,1fr);gap:10px}
+  .stat{padding:14px}
+  .stat-v{font-size:18px}
+  .grid-3,.grid-4{grid-template-columns:1fr}
+  .grid-2{grid-template-columns:1fr}
+  .fab{display:none}
+}
+
+@media(min-width:481px) and (max-width:900px){
+  .grid-2{grid-template-columns:repeat(2,1fr)}
+  .grid-auto{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+}
+
+@media(max-width:480px){
+  .tx{grid-template-columns:36px 1fr auto;gap:10px;padding:12px}
+  .tx-ico{width:36px;height:36px}
+  .tx-date{display:none}
+  .tx-amt{font-size:14px}
+  .topbar-r .btn span{display:none}
+}
+
+/* === REPORT === */
+.report-grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.report-card{
+  background:var(--paper);border-radius:var(--r-lg);padding:20px;
+  border:1px solid var(--line);box-shadow:var(--sh-1);
+}
+.report-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.report-h h3{font-family:var(--font-display);font-size:16px;font-weight:700;letter-spacing:-0.01em}
+.report-row{display:flex;justify-content:space-between;padding:8px 0;font-size:13px;align-items:center;gap:10px}
+.report-row+.report-row{border-top:1px dashed var(--line)}
+.report-row b{font-family:var(--font-mono);font-weight:700;white-space:nowrap}
+.bar{
+  height:8px;background:var(--paper-2);border-radius:99px;overflow:hidden;
+  margin-top:4px;margin-bottom:2px;
+}
+.bar-fill{
+  height:100%;border-radius:99px;
+  background:linear-gradient(90deg,var(--forest) 0%,var(--gold) 100%);
+  transition:width .6s cubic-bezier(.4,0,.2,1);
+}
+
+/* === EMPTY === */
+.empty{
+  text-align:center;padding:50px 20px;color:var(--muted);
+}
+.empty svg{width:64px;height:64px;margin:0 auto 14px;color:var(--line);display:block}
+.empty h3{font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink-2);margin-bottom:6px}
+.empty p{font-size:13px}
+
+/* === LOAD === */
+.loading{
+  position:fixed;top:14px;right:14px;background:var(--paper);
+  padding:8px 14px;border-radius:99px;font-size:12px;font-weight:600;
+  box-shadow:var(--sh-2);display:flex;align-items:center;gap:8px;z-index:300;
+  border:1px solid var(--line);
+}
+.loading.hide{display:none}
+.spinner{
+  width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--forest);
+  border-radius:50%;animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* === TOAST === */
+.toast{
+  position:fixed;bottom:100px;left:50%;transform:translateX(-50%);
+  background:var(--ink);color:var(--cream);padding:12px 20px;border-radius:99px;
+  font-size:13px;font-weight:500;box-shadow:var(--sh-3);z-index:400;
+  display:flex;align-items:center;gap:8px;
+  animation:toastIn .25s,toastOut .25s 2.5s forwards;
+}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1}}
+@keyframes toastOut{to{opacity:0;transform:translate(-50%,10px)}}
+
+/* === ANIMATIONS === */
+.fade-in{animation:fadeUp .35s cubic-bezier(.2,.9,.3,1) both}
+.fade-in:nth-child(1){animation-delay:.02s}
+.fade-in:nth-child(2){animation-delay:.06s}
+.fade-in:nth-child(3){animation-delay:.10s}
+.fade-in:nth-child(4){animation-delay:.14s}
+.fade-in:nth-child(5){animation-delay:.18s}
+.fade-in:nth-child(6){animation-delay:.22s}
+.fade-in:nth-child(n+7){animation-delay:.26s}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.view{display:none}
+.view.active{display:block}
+
+</style>
+</head>
+<body>
+
+<div id="loading" class="loading hide"><div class="spinner"></div><span>Yükleniyor</span></div>
+
+<div class="app">
+
+<!-- ============ SIDEBAR (desktop) ============ -->
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-l">
+      <div class="brand-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M9 21V8c0-1.66 1.34-3 3-3s3 1.34 3 3v13"/><path d="M5 21V13a2 2 0 0 1 2-2"/><path d="M19 21V13a2 2 0 0 0-2-2"/></svg>
+      </div>
+      <div>
+        <div class="brand-t">Bedlek Tarım</div>
+        <div class="brand-s">Defter · v2</div>
+      </div>
+    </div>
+    <div class="season-pill" id="brand-season">Sezon 2026</div>
+  </div>
+
+  <nav class="nav">
+    <div class="nav-section">Genel</div>
+    <div class="nav-item active" data-view="ana">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Ana Sayfa
+    </div>
+    <div class="nav-item" data-view="hareketler">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      Hareketler
+      <span class="nav-badge" id="badge-hareketler">0</span>
+    </div>
+
+    <div class="nav-section">Yönetim</div>
+    <div class="nav-item" data-view="tarlalar">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12c0-5 4-9 9-9s9 4 9 9-4 9-9 9-9-4-9-9z"/><path d="M3 12h18"/><path d="M12 3v18"/></svg>
+      Tarlalar
+      <span class="nav-badge" id="badge-tarlalar">0</span>
+    </div>
+    <div class="nav-item" data-view="firmalar">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg>
+      Firmalar
+      <span class="nav-badge" id="badge-firmalar">0</span>
+    </div>
+    <div class="nav-item" data-view="kisiler">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Kişiler
+      <span class="nav-badge" id="badge-kisiler">0</span>
+    </div>
+
+    <div class="nav-section">Analiz</div>
+    <div class="nav-item" data-view="raporlar">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+      Raporlar
+    </div>
+    <div class="nav-item" data-view="ayarlar">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Ayarlar
+    </div>
+  </nav>
+
+  <div class="sidebar-foot">
+    <div class="sb-status">
+      <span class="sb-dot" id="sb-dot"></span>
+      <span id="sb-status-t">Bağlanıyor...</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ============ MAIN ============ -->
+<main class="main">
+  <div class="topbar">
+    <div>
+      <h1 id="page-title">Ana Sayfa</h1>
+      <p id="page-sub">Sezon özeti</p>
+    </div>
+    <div class="topbar-r">
+      <button class="btn btn-ghost btn-sm" onclick="exportJSON()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Yedek</span>
+      </button>
+      <button class="btn btn-primary" onclick="openHareket()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Yeni Hareket</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ANA SAYFA -->
+    <div class="view active" id="v-ana">
+      <div class="stats" id="ana-stats"></div>
+      <div class="section-head">
+        <div>
+          <h2>Son Hareketler</h2>
+          <p>En yeni 8 kayıt</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="goView('hareketler')">Tümü →</button>
+      </div>
+      <div class="tx-list" id="ana-tx"></div>
+    </div>
+
+    <!-- HAREKETLER -->
+    <div class="view" id="v-hareketler">
+      <div class="toolbar">
+        <div class="search-w">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="search" id="srch-tx" placeholder="Hareket ara... (açıklama, kalem, kişi)" oninput="renderHareketler()">
+        </div>
+        <select class="select" id="flt-tur" onchange="renderHareketler()">
+          <option value="">Tüm türler</option>
+          <option value="harcama">Harcama</option>
+          <option value="hammadde">Hammadde</option>
+          <option value="nakit_avans">Nakit Avans</option>
+          <option value="borc">Borç</option>
+          <option value="gelir">Gelir</option>
+          <option value="sanayi_odeme">Sanayi</option>
+        </select>
+        <select class="select" id="flt-yon" onchange="renderHareketler()">
+          <option value="">Hepsi</option>
+          <option value="gelir">Gelir</option>
+          <option value="gider">Gider</option>
+        </select>
+      </div>
+      <div class="tx-list" id="tx-list"></div>
+    </div>
+
+    <!-- TARLALAR -->
+    <div class="view" id="v-tarlalar">
+      <div class="toolbar">
+        <div class="search-w">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="search" id="srch-tarla" placeholder="Tarla ara..." oninput="renderTarlalar()">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openTarla()">+ Tarla</button>
+      </div>
+      <div class="grid grid-auto" id="tarlalar-grid"></div>
+    </div>
+
+    <!-- FIRMALAR -->
+    <div class="view" id="v-firmalar">
+      <div class="toolbar">
+        <div class="search-w" style="flex:1"></div>
+        <button class="btn btn-primary btn-sm" onclick="openFirma()">+ Firma</button>
+      </div>
+      <div class="grid grid-2" id="firmalar-grid"></div>
+    </div>
+
+    <!-- KISILER -->
+    <div class="view" id="v-kisiler">
+      <div class="toolbar">
+        <div class="search-w">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="search" id="srch-kisi" placeholder="Kişi ara..." oninput="renderKisiler()">
+        </div>
+        <select class="select" id="flt-kisi-tur" onchange="renderKisiler()">
+          <option value="">Tüm türler</option>
+          <option value="aile">Aile</option>
+          <option value="hizmet">Hizmet</option>
+          <option value="tedarikci">Tedarikçi</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="openKisi()">+ Kişi</button>
+      </div>
+      <div class="grid grid-3" id="kisiler-grid"></div>
+    </div>
+
+    <!-- RAPORLAR -->
+    <div class="view" id="v-raporlar">
+      <div class="report-grid" id="reports"></div>
+    </div>
+
+    <!-- AYARLAR -->
+    <div class="view" id="v-ayarlar">
+      <div class="grid" style="grid-template-columns:1fr;max-width:560px">
+        <div class="card">
+          <h3 style="font-family:var(--font-display);font-size:17px;margin-bottom:6px">Veri Yönetimi</h3>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:14px">JSON olarak yedek al veya geri yükle.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="exportJSON()">📥 JSON İndir</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('imp-file').click()">📤 JSON Yükle</button>
+            <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importJSON(this)">
+            <button class="btn btn-danger btn-sm" onclick="if(confirm('Tüm yerel önbellek silinecek (Supabase verisi korunur). Devam?')){localStorage.clear();location.reload()}">🗑️ Önbellek Temizle</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="font-family:var(--font-display);font-size:17px;margin-bottom:6px">Sezon</h3>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Aktif sezon (raporlarda ve özet kartlarında kullanılır). Yeni sezon eklemek için aşağıya yıl yazıp + bas.</p>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select class="select" id="ayar-sezon" style="min-width:140px" onchange="setSezon(this.value)"></select>
+            <input class="input" id="yeni-sezon" type="number" placeholder="2027" min="2000" max="2100" style="width:120px">
+            <button class="btn btn-primary btn-sm" onclick="yeniSezonEkle()">+ Sezon</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="font-family:var(--font-display);font-size:17px;margin-bottom:6px">Kalem Yönetimi</h3>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Her tür için kullanılabilir kalemler. + ile ekle, × ile sil. Varsayılanlara dön butonu hepsini sıfırlar.</p>
+          <div id="kalem-yonet"></div>
+          <button class="btn btn-ghost btn-sm" style="margin-top:12px" onclick="kalemVarsayilanlara()">↺ Varsayılanlara dön</button>
+        </div>
+
+        <div class="card">
+          <h3 style="font-family:var(--font-display);font-size:17px;margin-bottom:6px">Bağlantı</h3>
+          <p style="font-size:13px;color:var(--muted)">Supabase: <code style="background:var(--paper-2);padding:2px 6px;border-radius:6px;font-size:11px">rgposasyazoethintugo</code></p>
+          <p style="font-size:13px;color:var(--muted);margin-top:4px">Veriler bedlek-tarim sitesi ile senkron çalışır.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+</div>
+
+<!-- ============ MOBILE NAV ============ -->
+<nav class="mob-nav">
+  <button class="mob-tab active" data-view="ana">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+    <span>Ana</span>
+  </button>
+  <button class="mob-tab" data-view="hareketler">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    <span>Liste</span>
+  </button>
+  <button class="mob-tab fab-tab" onclick="openHareket()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+  <button class="mob-tab" data-view="raporlar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+    <span>Rapor</span>
+  </button>
+  <button class="mob-tab" data-view="ayarlar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <span>Ayar</span>
+  </button>
+</nav>
+
+<!-- ============ HAREKET MODAL ============ -->
+<div class="overlay" id="overlay-hareket" onclick="if(event.target===this)closeHareket()">
+  <div class="modal">
+    <div class="m-handle"></div>
+    <div class="m-head">
+      <div>
+        <div class="m-title" id="hareket-title">Yeni Hareket</div>
+        <div class="m-sub">Tür seç, alanlar otomatik açılır</div>
+      </div>
+      <button class="m-close" onclick="closeHareket()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="m-body">
+      <div class="field">
+        <label class="field-l">Hareket türü <span class="req">*</span></label>
+        <div class="tur-grid">
+          <div class="tur-opt harcama"><input type="radio" name="h-tur" id="t-harcama" value="harcama" checked onchange="updateForm()"><label for="t-harcama">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5"/><polyline points="19 12 12 19 5 12"/></svg>
+            Harcama</label></div>
+          <div class="tur-opt hammadde"><input type="radio" name="h-tur" id="t-hammadde" value="hammadde" onchange="updateForm()"><label for="t-hammadde">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            Hammadde</label></div>
+          <div class="tur-opt avans"><input type="radio" name="h-tur" id="t-avans" value="nakit_avans" onchange="updateForm()"><label for="t-avans">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="6" x2="12" y2="12"/><polyline points="12 12 16 14"/></svg>
+            Avans</label></div>
+          <div class="tur-opt borc"><input type="radio" name="h-tur" id="t-borc" value="borc" onchange="updateForm()"><label for="t-borc">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            Borç</label></div>
+          <div class="tur-opt gelir"><input type="radio" name="h-tur" id="t-gelir" value="gelir" onchange="updateForm()"><label for="t-gelir">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><polyline points="5 12 12 5 19 12"/></svg>
+            Gelir</label></div>
+          <div class="tur-opt"><input type="radio" name="h-tur" id="t-sanayi" value="sanayi_odeme" onchange="updateForm()"><label for="t-sanayi">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+            Sanayi</label></div>
+          <div class="tur-opt hasat"><input type="radio" name="h-tur" id="t-hasat" value="hasat" onchange="updateForm()"><label for="t-hasat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22c5 0 9-3 9-7 0-3-2-5-5-5-3 0-5 3-5 5 0 1 1 2 1 2"/><path d="M22 22c-5 0-9-3-9-7 0-3 2-5 5-5 3 0 5 3 5 5 0 1-1 2-1 2"/><path d="M12 4v18"/><path d="M12 4l-3-2"/><path d="M12 4l3-2"/></svg>
+            Hasat</label></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-l">Kalem <span class="req">*</span></label>
+        <select class="input" id="f-kalem" onchange="handleKalemNew(this)"></select>
+      </div>
+
+      <div class="row row-2">
+        <div class="field">
+          <label class="field-l">Tutar (TL)</label>
+          <input class="input" type="number" id="f-tutar" placeholder="0" step="0.01">
+        </div>
+        <div class="field">
+          <label class="field-l">Tarih <span class="req">*</span></label>
+          <input class="input" type="date" id="f-tarih">
+        </div>
+      </div>
+
+      <div class="row row-2" id="row-miktar" style="display:none">
+        <div class="field">
+          <label class="field-l">Miktar</label>
+          <input class="input" type="number" id="f-miktar" placeholder="0" step="0.01">
+        </div>
+        <div class="field">
+          <label class="field-l">Birim</label>
+          <select class="input" id="f-birim">
+            <option value="kg">kg</option>
+            <option value="lt">lt</option>
+            <option value="adet">adet</option>
+            <option value="ton">ton</option>
+            <option value="çuval">çuval</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field" id="row-firma">
+        <label class="field-l">Firma</label>
+        <select class="input" id="f-firma" onchange="handleSelectNew(this,'firma')"><option value="">— seçme —</option></select>
+      </div>
+
+      <div class="field" id="row-tarla">
+        <label class="field-l">Tarla</label>
+        <select class="input" id="f-tarla" onchange="handleSelectNew(this,'tarla')"><option value="">— seçme —</option></select>
+      </div>
+
+      <div class="field" id="row-kisi">
+        <label class="field-l">Kişi / Tedarikçi</label>
+        <select class="input" id="f-kisi" onchange="handleSelectNew(this,'kisi')"><option value="">— seçme —</option></select>
+      </div>
+
+      <div class="field" id="row-kaynak">
+        <label class="field-l">Kaynak</label>
+        <select class="input" id="f-kaynak">
+          <option value="cep">Cep / Kendi</option>
+          <option value="avans">Firma Avansı</option>
+          <option value="firma">Firma (doğrudan)</option>
+          <option value="sahsi">Şahsi</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="field-l">Açıklama</label>
+        <textarea class="textarea" id="f-aciklama" placeholder="Kısa not..."></textarea>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-danger btn-sm" id="btn-sil-h" style="display:none" onclick="silHareket()">Sil</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" onclick="closeHareket()">İptal</button>
+      <button class="btn btn-primary" onclick="kaydetHareket()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TARLA MODAL ============ -->
+<div class="overlay" id="overlay-tarla" onclick="if(event.target===this)closeTarla()">
+  <div class="modal" style="max-width:480px">
+    <div class="m-handle"></div>
+    <div class="m-head">
+      <div><div class="m-title" id="tarla-title">Yeni Tarla</div></div>
+      <button class="m-close" onclick="closeTarla()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="m-body">
+      <div class="field"><label class="field-l">Tarla adı <span class="req">*</span></label><input class="input" id="t-ad"></div>
+      <div class="row row-2">
+        <div class="field"><label class="field-l">Ürün</label><input class="input" id="t-urun" placeholder="Patates, Buğday..."></div>
+        <div class="field"><label class="field-l">Dekar</label><input class="input" type="number" id="t-dekar" placeholder="0"></div>
+      </div>
+      <div class="field"><label class="field-l">Sahip</label><input class="input" id="t-sahip"></div>
+      <div class="row row-2">
+        <div class="field"><label class="field-l">Modül</label>
+          <select class="input" id="t-modul">
+            <option value="sahsi">Şahsi</option>
+            <option value="sozlesmeli">Sözleşmeli</option>
+          </select>
+        </div>
+        <div class="field"><label class="field-l">Firma</label><select class="input" id="t-firma" onchange="handleSelectNew(this,'firma')"><option value="">— yok —</option></select></div>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-danger btn-sm" id="btn-sil-t" style="display:none" onclick="silTarla()">Sil</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" onclick="closeTarla()">İptal</button>
+      <button class="btn btn-primary" onclick="kaydetTarla()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ FIRMA MODAL ============ -->
+<div class="overlay" id="overlay-firma" onclick="if(event.target===this)closeFirma()">
+  <div class="modal" style="max-width:420px">
+    <div class="m-handle"></div>
+    <div class="m-head">
+      <div><div class="m-title" id="firma-title">Yeni Firma</div></div>
+      <button class="m-close" onclick="closeFirma()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="m-body">
+      <div class="field"><label class="field-l">Firma adı <span class="req">*</span></label><input class="input" id="fi-ad"></div>
+      <div class="field"><label class="field-l">Ürün</label><input class="input" id="fi-urun"></div>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-danger btn-sm" id="btn-sil-f" style="display:none" onclick="silFirma()">Sil</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" onclick="closeFirma()">İptal</button>
+      <button class="btn btn-primary" onclick="kaydetFirma()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ KISI MODAL ============ -->
+<div class="overlay" id="overlay-kisi" onclick="if(event.target===this)closeKisi()">
+  <div class="modal" style="max-width:420px">
+    <div class="m-handle"></div>
+    <div class="m-head">
+      <div><div class="m-title" id="kisi-title">Yeni Kişi</div></div>
+      <button class="m-close" onclick="closeKisi()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="m-body">
+      <div class="field"><label class="field-l">Ad Soyad <span class="req">*</span></label><input class="input" id="ki-ad"></div>
+      <div class="field"><label class="field-l">Tür</label>
+        <select class="input" id="ki-tur">
+          <option value="aile">Aile</option>
+          <option value="hizmet">Hizmet</option>
+          <option value="tedarikci">Tedarikçi</option>
+        </select>
+      </div>
+      <div class="field"><label class="field-l">Telefon</label><input class="input" id="ki-tel"></div>
+      <div class="field"><label class="field-l">Not</label><textarea class="textarea" id="ki-not"></textarea></div>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-danger btn-sm" id="btn-sil-k" style="display:none" onclick="silKisi()">Sil</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" onclick="closeKisi()">İptal</button>
+      <button class="btn btn-primary" onclick="kaydetKisi()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<button class="fab" onclick="openHareket()" title="Yeni Hareket">
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>
+
+<script src="app.js"></script>
+</body>
+</html>
