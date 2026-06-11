@@ -683,8 +683,9 @@ const TX_CLASS = { harcama: 'gider', hammadde: 'hammadde', nakit_avans: 'gelir',
 function goView(v) {
   state.view = v;
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('active', el.id === 'v-' + v));
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.view === v));
-  document.querySelectorAll('.mob-tab').forEach(el => el.classList.toggle('active', el.dataset.view === v));
+  document.querySelectorAll('.nav-item[data-view]').forEach(el => el.classList.toggle('active', el.dataset.view === v));
+  document.querySelectorAll('.mob-tab[data-view]').forEach(el => el.classList.toggle('active', el.dataset.view === v));
+  $('mob-daha')?.classList.toggle('active', ['tarlalar', 'firmalar', 'kisiler', 'ayarlar'].includes(v));
   const titles = { ana: ['Ana Sayfa', 'Sezon özeti'], hareketler: ['Hareketler', 'Tüm gelir/gider kayıtları'], tarlalar: ['Tarlalar', 'Tarla bazlı maliyet'], firmalar: ['Firmalar', 'Sözleşmeli üretim hesabı'], kisiler: ['Kişiler', 'Aile, hizmet, tedarikçi'], raporlar: ['Raporlar', state.sezon + ' sezonu analizi'], ayarlar: ['Ayarlar', 'Veri ve sezon'] };
   const [t, s] = titles[v] || ['', ''];
   $('page-title').textContent = t;
@@ -693,6 +694,13 @@ function goView(v) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 window.goView = goView;
+
+function openDaha() { $('overlay-daha').classList.add('open'); }
+window.openDaha = openDaha;
+function closeDaha() { $('overlay-daha').classList.remove('open'); }
+window.closeDaha = closeDaha;
+function gitDaha(v) { closeDaha(); goView(v); }
+window.gitDaha = gitDaha;
 
 function render() {
   renderBadges();
