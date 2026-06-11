@@ -244,6 +244,67 @@ function kisiBakiye(kisiId) {
   return bakiye;
 }
 
+// ============ FİRMA / KİŞİ DETAY ============
+function statBlok(label, value, cls) {
+  return `<div class="firma-stat"><div class="firma-stat-l">${label}</div><div class="firma-stat-v ${cls || ''}">${value}</div></div>`;
+}
+
+function closeDetay() {
+  $('overlay-detay').classList.remove('open');
+}
+window.closeDetay = closeDetay;
+
+function openFirmaDetay(id) {
+  const f = state.firmalar.find(x => x.id === id);
+  if (!f) return;
+  const h = firmaHesap(f.id);
+  const hareketler = state.hareketler
+    .filter(x => x.firma_id === id && x.sezon === state.sezon)
+    .sort((a, b) => (b.olusturma || '').localeCompare(a.olusturma || ''));
+
+  $('detay-title').textContent = f.ad;
+  $('detay-sub').textContent = (f.urun ? f.urun + ' · ' : '') + state.sezon + ' sezonu';
+  $('detay-stats').innerHTML =
+    statBlok('Avans Alındı', tl(h.avans), 'green') +
+    statBlok('Harcanan', tl(h.harcanan), 'red') +
+    statBlok('Kalan', tl(h.kalan), 'orange');
+  $('detay-tx').innerHTML = hareketler.length
+    ? hareketler.map((hh, i) => txCard(hh, i)).join('')
+    : emptyState('Hareket yok', 'Bu firma için bu sezon henüz kayıt eklenmemiş.');
+  $('btn-detay-duzenle').onclick = () => { closeDetay(); duzenleFirma(id); };
+  $('btn-detay-hareket').onclick = () => { closeDetay(); openHareket(); $('f-firma').value = id; };
+  $('overlay-detay').classList.add('open');
+}
+window.openFirmaDetay = openFirmaDetay;
+
+function openKisiDetay(id) {
+  const k = state.kisiler.find(x => x.id === id);
+  if (!k) return;
+  const hareketler = state.hareketler
+    .filter(x => x.kisi_id === id)
+    .sort((a, b) => (b.olusturma || '').localeCompare(a.olusturma || ''));
+  let verilen = 0, alinan = 0;
+  hareketler.forEach(h => {
+    const t = parseFloat(h.tutar) || 0;
+    if (h.yon === 'gider') verilen += t; else alinan += t;
+  });
+  const bakiye = kisiBakiye(id);
+
+  $('detay-title').textContent = k.ad;
+  $('detay-sub').textContent = k.tur + (k.telefon ? ' · ' + k.telefon : '');
+  $('detay-stats').innerHTML =
+    statBlok('Verilen', tl(verilen), 'red') +
+    statBlok('Alınan', tl(alinan), 'green') +
+    statBlok(bakiye >= 0 ? 'Alacaklı' : 'Borçlu', (bakiye >= 0 ? '+' : '') + tl(bakiye), bakiye >= 0 ? 'green' : 'red');
+  $('detay-tx').innerHTML = hareketler.length
+    ? hareketler.map((hh, i) => txCard(hh, i)).join('')
+    : emptyState('Hareket yok', 'Bu kişi için henüz kayıt eklenmemiş.');
+  $('btn-detay-duzenle').onclick = () => { closeDetay(); duzenleKisi(id); };
+  $('btn-detay-hareket').onclick = () => { closeDetay(); openHareket(); $('f-kisi').value = id; };
+  $('overlay-detay').classList.add('open');
+}
+window.openKisiDetay = openKisiDetay;
+
 // ============ RENDER: NAV BADGE ============
 function renderBadges() {
   $('badge-hareketler').textContent = state.hareketler.filter(h => h.sezon === state.sezon).length;
@@ -388,7 +449,7 @@ function renderFirmalar() {
   $('firmalar-grid').innerHTML = rows.length ? rows.map((f, i) => {
     const h = firmaHesap(f.id);
     return `
-      <div class="firma-card fade-in" style="animation-delay:${i * .05 + .04}s" onclick="duzenleFirma('${f.id}')">
+      <div class="firma-card fade-in" style="animation-delay:${i * .05 + .04}s" onclick="openFirmaDetay('${f.id}')">
         <div class="firma-h">
           <div class="firma-ad">${escapeHtml(f.ad)}</div>
           <div class="firma-urun">${escapeHtml(f.urun || '—')}</div>
@@ -423,7 +484,7 @@ function renderKisiler() {
     const bakiye = kisiBakiye(k.id);
     const av = (k.ad || '?').trim()[0] || '?';
     return `
-      <div class="kisi-card fade-in" style="animation-delay:${Math.min(i, 12) * .03 + .04}s" onclick="duzenleKisi('${k.id}')">
+      <div class="kisi-card fade-in" style="animation-delay:${Math.min(i, 12) * .03 + .04}s" onclick="openKisiDetay('${k.id}')">
         <div class="kisi-av ${k.tur}">${av}</div>
         <div class="kisi-info">
           <div class="kisi-ad">${escapeHtml(k.ad)}</div>
@@ -655,6 +716,8 @@ function openHareket() {
   $('t-harcama').checked = true;
   $('f-tutar').value = '';
   $('f-miktar').value = '';
+  $('f-birim-fiyat').value = '';
+  $('f-toplam-goster').textContent = '0 ₺';
   $('f-tarih').value = today();
   $('f-aciklama').value = '';
   $('f-firma').value = '';
@@ -701,12 +764,27 @@ function updateForm() {
   const isBorc = tur === 'borc';
   const isAvans = tur === 'nakit_avans';
   $('row-miktar').style.display = (isHammadde || isHasat) ? 'grid' : 'none';
+  $('row-birimfiyat').style.display = isHammadde ? 'grid' : 'none';
+  $('field-tutar').style.display = isHammadde ? 'none' : 'block';
   $('row-firma').style.display = (isAvans || tur === 'harcama' || isHammadde || isHasat) ? 'block' : 'none';
   $('row-tarla').style.display = (tur === 'harcama' || isHammadde || isHasat) ? 'block' : 'none';
   $('row-kisi').style.display = (tur !== 'nakit_avans') ? 'block' : 'none';
   $('row-kaynak').style.display = (tur === 'harcama' || isHammadde) ? 'block' : 'none';
+  if (isHammadde) updateHammaddeToplam();
 }
 window.updateForm = updateForm;
+
+// Hammadde: miktar × birim fiyat = tutar (otomatik hesap)
+function updateHammaddeToplam() {
+  const tur = document.querySelector('input[name="h-tur"]:checked')?.value;
+  if (tur !== 'hammadde') return;
+  const miktar = parseFloat($('f-miktar').value) || 0;
+  const fiyat = parseFloat($('f-birim-fiyat').value) || 0;
+  const toplam = miktar * fiyat;
+  $('f-tutar').value = toplam ? toplam.toFixed(2) : '';
+  $('f-toplam-goster').textContent = _tl(toplam);
+}
+window.updateHammaddeToplam = updateHammaddeToplam;
 
 // Yeni kalem ekleme (Diğer dışı, kalıcı)
 async function handleKalemNew(el) {
@@ -730,22 +808,24 @@ window.handleKalemNew = handleKalemNew;
 function duzenleHareket(id) {
   const h = state.hareketler.find(x => x.id === id);
   if (!h) return;
+  closeDetay();
   state.edit.hareket = id;
   $('hareket-title').textContent = 'Hareketi Düzenle';
   $('btn-sil-h').style.display = 'inline-flex';
   populateSelects();
   document.querySelector(`input[name="h-tur"][value="${h.tur}"]`).checked = true;
-  updateForm();
   $('f-kalem').value = h.kalem || '';
   $('f-tutar').value = h.tutar || '';
   $('f-tarih').value = h.tarih || today();
   $('f-miktar').value = h.miktar || '';
   $('f-birim').value = h.birim || 'kg';
+  $('f-birim-fiyat').value = h.birim_fiyat || (h.miktar ? +(h.tutar / h.miktar).toFixed(2) : '');
   $('f-firma').value = h.firma_id || '';
   $('f-tarla').value = h.tarla_id || '';
   $('f-kisi').value = h.kisi_id || '';
   $('f-kaynak').value = h.kaynak || 'cep';
   $('f-aciklama').value = h.aciklama || '';
+  updateForm();
   $('overlay-hareket').classList.add('open');
 }
 window.duzenleHareket = duzenleHareket;
@@ -774,7 +854,8 @@ async function kaydetHareket() {
   if (tur === 'hammadde') {
     data.miktar = parseFloat($('f-miktar').value) || 0;
     data.birim = $('f-birim').value || 'kg';
-    if (tutar > 0 && data.miktar > 0) data.birim_fiyat = +(tutar / data.miktar).toFixed(2);
+    data.birim_fiyat = parseFloat($('f-birim-fiyat').value) || 0;
+    data.tutar = +(data.miktar * data.birim_fiyat).toFixed(2);
   }
 
   if (state.edit.hareket) {
