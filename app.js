@@ -282,14 +282,16 @@ function tarlaKarZarar(tarlaId) {
 
 function firmaHesap(firmaId) {
   const hh = state.hareketler.filter(h => h.firma_id === firmaId && h.sezon === state.sezon);
-  let avans = 0, harcanan = 0, gelir = 0;
+  let avans = 0, harcanan = 0, gelir = 0, firmaMali = 0;
   hh.forEach(h => {
     const t = parseFloat(h.tutar) || 0;
     if (h.tur === 'nakit_avans') avans += t;
+    else if (h.kaynak === 'firma') firmaMali += t;              // firmadan AYNİ gelen mal (ilaç, gübre vb.)
     else if (h.kaynak === 'avans') harcanan += t;
     else if (h.yon === 'gelir' && h.tur !== 'nakit_avans') gelir += t;
   });
-  return { avans, harcanan, kalan: avans - harcanan, gelir };
+  // Firmaya toplam borç = alınan nakit avans + ayni mal (ikisi de firmadan alındı, ödenecek)
+  return { avans, harcanan, kalan: avans - harcanan, gelir, firmaMali, borc: avans + firmaMali };
 }
 
 function kisiBakiye(kisiId) {
@@ -327,7 +329,8 @@ function openFirmaDetay(id) {
   $('detay-stats').innerHTML =
     statBlok('Avans Alındı', tl(h.avans), 'green') +
     statBlok('Harcanan', tl(h.harcanan), 'red') +
-    statBlok('Kalan', tl(h.kalan), 'orange');
+    statBlok('Kalan', tl(h.kalan), 'orange') +
+    (h.firmaMali > 0 ? statBlok('Firma Malı (ayni)', tl(h.firmaMali), 'orange') : '');
   $('detay-tx').innerHTML = hareketler.length
     ? hareketler.map((hh, i) => txCard(hh, i)).join('')
     : emptyState('Hareket yok', 'Bu firma için bu sezon henüz kayıt eklenmemiş.');
@@ -532,6 +535,10 @@ function renderFirmalar() {
             <div class="firma-stat-l">Kalan</div>
             <div class="firma-stat-v orange">${tl(h.kalan)}</div>
           </div>
+          ${h.firmaMali > 0 ? `<div class="firma-stat" style="grid-column:1/-1">
+            <div class="firma-stat-l">Firma Malı (ayni)</div>
+            <div class="firma-stat-v orange">${tl(h.firmaMali)}</div>
+          </div>` : ''}
         </div>
       </div>`;
   }).join('') : emptyState('Firma yok', '+ Firma butonuna bas.');
@@ -968,6 +975,8 @@ async function kaydetHareket() {
   // hasat (stok/depoya giriş) tutarsız kaydedilebilir.
   const _miktarVar = (parseFloat($('f-miktar').value) || 0) > 0;
   if (tutar <= 0 && !(tur === 'hasat' && _miktarVar)) { toast('Geçerli bir tutar girin'); return; }
+  // Firma malı (ayni) ise hangi firmadan geldiği belli olmalı
+  if ($('f-kaynak').value === 'firma' && !$('f-firma').value) { toast('Firma malı için firma seçin'); return; }
 
   const yon = TUR_YON[tur];
   const data = {
