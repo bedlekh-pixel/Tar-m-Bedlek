@@ -80,6 +80,14 @@ const _tl = n => Math.round(n || 0).toLocaleString('tr-TR') + ' ₺';
 const _tl0 = n => Math.round(n || 0).toLocaleString('tr-TR');
 const tl = n => state.gizli ? '••••• ₺' : _tl(n);
 const tl0 = n => state.gizli ? '•••••' : _tl0(n);
+// Kısa tutar (grafik etiketi için): 12.500→"12,5b", 120.000→"120b", 1.200.000→"1,2M"
+const _kisa = n => {
+  n = Math.round(n || 0);
+  if (n >= 1000000) return (n / 1000000).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) + 'M';
+  if (n >= 1000) return (n / 1000).toLocaleString('tr-TR', { maximumFractionDigits: n >= 100000 ? 0 : 1 }) + 'b';
+  return String(n);
+};
+const tlKisa = n => state.gizli ? '•••' : _kisa(n);
 const fd = s => { if (!s) return '—'; const p = s.split('-'); return p.length === 3 ? p[2] + '.' + p[1] + '.' + p[0] : s; };
 const uid = pre => pre + '_' + Date.now() + Math.floor(Math.random() * 1000);
 const today = () => new Date().toISOString().slice(0, 10);
@@ -768,7 +776,8 @@ function renderRaporlar() {
         ${ayArr.map(([ay, v]) => {
           const hpx = Math.max(6, Math.round(v / ayMax * 110));
           const ayNo = parseInt(ay.slice(5, 7), 10);
-          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:5px;min-width:0">
+          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;min-width:0">
+            <div style="font-size:9px;font-family:var(--font-mono);font-weight:700;color:var(--ink-2);white-space:nowrap">${tlKisa(v)}</div>
             <div style="width:100%;height:${hpx}px;border-radius:6px 6px 0 0;background:linear-gradient(180deg,var(--red) 0%,var(--orange) 100%)" title="${AY_AD[ayNo - 1] || ay}: ${tl(v)}"></div>
             <div style="font-size:10px;color:var(--muted)">${AY_AD[ayNo - 1] || ''}</div>
           </div>`;
