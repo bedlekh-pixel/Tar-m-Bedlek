@@ -256,9 +256,17 @@ function mergeKalemler(loaded) {
 // ============ HESAPLAR ============
 function harcamaToplam(h) { return (parseFloat(h.tutar) || 0); }
 
+// Tarla NAKİT maliyeti — cepten/şahsi + avanstan çıkan. Firma malı (ayni) HARİÇ.
 function tarlaMaliyeti(tarlaId) {
   return state.hareketler
-    .filter(h => h.tarla_id === tarlaId && h.yon === 'gider' && h.sezon === state.sezon)
+    .filter(h => h.tarla_id === tarlaId && h.yon === 'gider' && h.sezon === state.sezon && h.kaynak !== 'firma')
+    .reduce((s, h) => s + harcamaToplam(h), 0);
+}
+
+// Tarlaya firmadan gelen AYNİ malın değeri (ayrı gösterilir)
+function tarlaFirmaMali(tarlaId) {
+  return state.hareketler
+    .filter(h => h.tarla_id === tarlaId && h.sezon === state.sezon && h.kaynak === 'firma')
     .reduce((s, h) => s + harcamaToplam(h), 0);
 }
 
@@ -276,8 +284,10 @@ function tarlaHasat(tarlaId) {
 
 function tarlaKarZarar(tarlaId) {
   const m = tarlaMaliyeti(tarlaId);
+  const fm = tarlaFirmaMali(tarlaId);
   const h = tarlaHasat(tarlaId);
-  return { maliyet: m, gelir: h.gelir, net: h.gelir - m, hasat: h };
+  // Net, nakit maliyet üzerinden (firma malı ayrı izlenir, firmaya borç)
+  return { maliyet: m, firmaMali: fm, gelir: h.gelir, net: h.gelir - m, hasat: h };
 }
 
 function firmaHesap(firmaId) {
@@ -383,17 +393,18 @@ function renderAna() {
   // Avans ve borç FİNANSMANDIR — gerçek gelir/gider ve kâr/zarara KATILMAZ. Yoksa
   // firmadan alınan avans "gelir" görünür ve çiftçi borçluyken "kâr" gösterir.
   const finansman = h => (h.tur === 'nakit_avans' || h.tur === 'borc');
-  let gelir = 0, gider = 0, hasatGelir = 0, avansBorc = 0;
+  let gelir = 0, gider = 0, hasatGelir = 0, avansBorc = 0, firmaMaliT = 0;
   hh.forEach(h => {
     const t = parseFloat(h.tutar) || 0;
     if (h.tur === 'hasat') hasatGelir += t;
+    if (h.kaynak === 'firma') { firmaMaliT += t; return; }   // firma malı: bizim giderimiz değil (firmaya borç)
     if (finansman(h)) { avansBorc += (h.yon === 'gelir' ? t : -t); return; }
     if (h.yon === 'gelir') gelir += t; else gider += t;
   });
   const net = gelir - gider;
 
-  // En çok harcama yapılan kalem (finansman hariç)
-  const giderler = hh.filter(h => h.yon === 'gider' && !finansman(h));
+  // En çok harcama yapılan kalem (finansman + firma malı hariç)
+  const giderler = hh.filter(h => h.yon === 'gider' && !finansman(h) && h.kaynak !== 'firma');
   const kalemMap = {};
   giderler.forEach(h => {
     kalemMap[h.kalem] = (kalemMap[h.kalem] || 0) + (parseFloat(h.tutar) || 0);
@@ -403,7 +414,7 @@ function renderAna() {
   const stats = [
     { color: 'green', icon: ic.gelir, l: 'Toplam Gelir', v: tl(gelir), s: `${state.sezon} sezonu` },
     { color: 'red', icon: ic.gider, l: 'Toplam Gider', v: tl(gider), s: giderler.length + ' işlem' },
-    { color: net >= 0 ? 'orange' : 'red', icon: ic.wallet, l: 'Net Durum', v: tl(net), s: (net >= 0 ? '✓ Kâr' : '⚠ Zarar') + (avansBorc ? ' · Avans/Borç ' + tl(avansBorc) : '') },
+    { color: net >= 0 ? 'orange' : 'red', icon: ic.wallet, l: 'Net Durum', v: tl(net), s: (net >= 0 ? '✓ Kâr' : '⚠ Zarar') + (avansBorc ? ' · Avans/Borç ' + tl(avansBorc) : '') + (firmaMaliT ? ' · Firma malı ' + tl(firmaMaliT) : '') },
     { color: 'gold', icon: ic.wheat, l: 'Hasat Geliri', v: hasatGelir > 0 ? tl(hasatGelir) : '—', s: hh.filter(h => h.tur === 'hasat').length + ' hasat' }
   ];
   const gizliIcon = state.gizli
@@ -497,9 +508,9 @@ function renderTarlalar() {
         </div>
         <div class="tarla-cost">
           <div>
-            <div class="tarla-cost-l">Maliyet</div>
+            <div class="tarla-cost-l">Maliyet ${kz.firmaMali > 0 ? '(nakit)' : ''}</div>
             <div class="tarla-cost-v">${tl(kz.maliyet)}</div>
-            <div class="tarla-dekar-cost">${tl(dekarMaliyet)}/dk</div>
+            <div class="tarla-dekar-cost">${tl(dekarMaliyet)}/dk${kz.firmaMali > 0 ? ' · firma malı ' + tl(kz.firmaMali) : ''}</div>
           </div>
           <div style="text-align:right">
             <div class="tarla-cost-l">${kz.gelir > 0 ? (kz.net >= 0 ? 'Kâr' : 'Zarar') : 'Hasat'}</div>
@@ -574,9 +585,11 @@ function renderRaporlar() {
   // Genel özet — avans/borç finansmandır, gelir/gider ve kâr/zarara katılmaz
   const finansman = h => (h.tur === 'nakit_avans' || h.tur === 'borc');
   let totalGelir = 0, totalGider = 0, hasatGelir = 0;
+  let firmaMaliT = 0;
   hh.forEach(h => {
     const t = parseFloat(h.tutar) || 0;
     if (h.tur === 'hasat') hasatGelir += t;
+    if (h.kaynak === 'firma') { firmaMaliT += t; return; }   // firma malı: bizim giderimiz değil (firmaya borç)
     if (finansman(h)) return;
     if (h.yon === 'gelir') totalGelir += t; else totalGider += t;
   });
@@ -585,9 +598,9 @@ function renderRaporlar() {
   const gelirPct = Math.round(totalGelir / maxVal * 100);
   const giderPct = Math.round(totalGider / maxVal * 100);
 
-  // 1. Kalem dağılımı (finansman hariç)
+  // 1. Kalem dağılımı (finansman + firma malı hariç)
   const kalemMap = {};
-  hh.filter(h => h.yon === 'gider' && !finansman(h)).forEach(h => {
+  hh.filter(h => h.yon === 'gider' && !finansman(h) && h.kaynak !== 'firma').forEach(h => {
     kalemMap[h.kalem] = (kalemMap[h.kalem] || 0) + (parseFloat(h.tutar) || 0);
   });
   const kalemArr = Object.entries(kalemMap).sort((a, b) => b[1] - a[1]);
@@ -595,6 +608,7 @@ function renderRaporlar() {
 
   // 2. Firma raporu
   const firmaR = state.firmalar.map(f => ({ f, ...firmaHesap(f.id) })).sort((a, b) => b.kalan - a.kalan);
+  const firmaMaliR = firmaR.filter(x => x.firmaMali > 0).sort((a, b) => b.firmaMali - a.firmaMali);
 
   // 3. Tarla maliyeti
   const tarlaR = state.tarlalar.map(t => ({ t, maliyet: tarlaMaliyeti(t.id) })).filter(x => x.maliyet > 0).sort((a, b) => b.maliyet - a.maliyet);
@@ -734,6 +748,19 @@ function renderRaporlar() {
         </div>
       `).join('') : '<div style="color:var(--muted);font-size:13px">Veri yok</div>'}
     </div>
+
+    ${firmaMaliR.length ? `<div class="report-card fade-in">
+      <div class="report-h"><h3>🏭 Firma Malı (Ayni)</h3><span class="chip">${tl(firmaMaliT)}</span></div>
+      ${firmaMaliR.map(({ f, firmaMali, borc }) => `
+        <div class="report-row" style="display:block">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="font-weight:600">${escapeHtml(f.ad)}</span>
+            <b style="color:var(--orange)">${tl(firmaMali)}</b>
+          </div>
+          <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">ayni mal · firmaya toplam borç ${tl(borc)}</div>
+        </div>
+      `).join('')}
+    </div>` : ''}
 
     <div class="report-card fade-in">
       <div class="report-h"><h3>📈 Aylık Gider</h3><span class="chip">${state.sezon}</span></div>
