@@ -99,7 +99,7 @@ function setOnline(on) {
   $('sb-dot').classList.toggle('off', !on);
   $('sb-status-t').textContent = on ? 'Bağlı · Supabase' : 'Çevrimdışı';
 }
-window.addEventListener('online', () => setOnline(true));
+window.addEventListener('online', async () => { setOnline(true); await flushDirty(); render(); });
 window.addEventListener('offline', () => setOnline(false));
 
 // ============ SUPABASE I/O ============
@@ -138,7 +138,8 @@ function cacheGet(key) {
   try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; }
 }
 function cacheSet(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  try { localStorage.setItem(key, JSON.stringify(value)); }
+  catch (e) { console.error('cacheSet kota', key, e); toast('⚠ Yerel depolama dolu — hemen yedek alın!'); }
 }
 
 // Hibrit load: cache'den önce göster, sonra supa'dan güncelle
@@ -155,6 +156,8 @@ async function loadAll() {
 
   // 2. Supabase'den taze çek
   if (navigator.onLine) {
+    // ÖNCE bekleyen yerel değişiklikleri buluta it — yoksa aşağıdaki çekiş onları ezer
+    await flushDirty();
     try {
       const [f, t, k, h, kl] = await Promise.all([
         supaGet(KEYS.firmalar),
@@ -163,11 +166,20 @@ async function loadAll() {
         supaGet(KEYS.hareketler),
         supaGet(KEYS.kalemler)
       ]);
-      if (f) { state.firmalar = f; cacheSet(KEYS.firmalar, f); }
-      if (t) { state.tarlalar = t; cacheSet(KEYS.tarlalar, t); }
-      if (k) { state.kisiler = k; cacheSet(KEYS.kisiler, k); }
-      if (h) { state.hareketler = h; cacheSet(KEYS.hareketler, h); }
-      if (kl) { state.kalemler = mergeKalemler(kl); cacheSet(KEYS.kalemler, state.kalemler); }
+      // Kirli kalan (buluta gidememiş) koleksiyonu sunucudan ALMA — yoksa yerel veri kaybolur
+      if (f  && !isDirty(KEYS.firmalar))   { state.firmalar = f;  cacheSet(KEYS.firmalar, f); }
+      if (t  && !isDirty(KEYS.tarlalar))   { state.tarlalar = t;  cacheSet(KEYS.tarlalar, t); }
+      if (k  && !isDirty(KEYS.kisiler))    { state.kisiler = k;   cacheSet(KEYS.kisiler, k); }
+      if (h  && !isDirty(KEYS.hareketler)) { state.hareketler = h; cacheSet(KEYS.hareketler, h); }
+      if (kl && !isDirty(KEYS.kalemler))   { state.kalemler = mergeKalemler(kl); cacheSet(KEYS.kalemler, state.kalemler); }
+      // Sezonlar: sunucu + yerel BİRLEŞTİR (union — hiçbir sezon kaybolmaz)
+      const ss = await supaGet('bt_sezonlar');
+      if (Array.isArray(ss)) {
+        let yerel = [];
+        try { yerel = JSON.parse(localStorage.getItem('bt_sezonlar') || '[]'); } catch {}
+        const birlesik = Array.from(new Set([...yerel.map(String), ...ss.map(String)]));
+        localStorage.setItem('bt_sezonlar', JSON.stringify(birlesik));
+      }
       setOnline(true);
     } catch (e) {
       setOnline(false);
@@ -175,13 +187,56 @@ async function loadAll() {
   } else {
     setOnline(false);
   }
+  syncBanner();
   showLoading(false);
   render();
 }
 
+// ---- Bekleyen (buluta gönderilememiş) yazma yönetimi ----
+// Amaç: çevrimdışıyken/hatada girilen veri, bir sonraki açılışta sunucudaki
+// ESKİ veriyle ezilmesin. Kirli işaretli koleksiyon önce buluta itilir; itilene
+// kadar sunucudan ÇEKİLMEZ.
+function dirtyKey(key) { return 'bt_dirty_' + key; }
+function isDirty(key)  { return localStorage.getItem(dirtyKey(key)) === '1'; }
+function setDirty(key, on) {
+  if (on) localStorage.setItem(dirtyKey(key), '1');
+  else localStorage.removeItem(dirtyKey(key));
+}
+function bekleyenSayisi() { return Object.values(KEYS).filter(isDirty).length; }
+
 async function persist(key) {
-  cacheSet(key, state[key.replace('bt_', '')]);
-  await supaSet(key, state[key.replace('bt_', '')]);
+  const prop = key.replace('bt_', '');
+  cacheSet(key, state[prop]);            // önce yerel — veri her koşulda güvende
+  const ok = await supaSet(key, state[prop]);
+  setDirty(key, !ok);                     // buluta gidemezse "bekliyor" işaretle
+  syncBanner();
+  return ok;
+}
+
+// Bekleyen yerel değişiklikleri buluta gönder (açılışta + internet gelince)
+async function flushDirty() {
+  if (!navigator.onLine) return;
+  for (const key of Object.values(KEYS)) {
+    if (!isDirty(key)) continue;
+    const ok = await supaSet(key, state[key.replace('bt_', '')]);
+    if (ok) setDirty(key, false);
+  }
+  syncBanner();
+}
+
+// Senkronlanmamış veri varsa üstte kalıcı uyarı bandı göster
+function syncBanner() {
+  const n = bekleyenSayisi();
+  let el = document.getElementById('sync-banner');
+  if (!n) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'sync-banner';
+    el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#b45309;color:#fff;padding:9px 12px;font-size:13px;line-height:1.35;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer';
+    el.onclick = () => flushDirty().then(render);
+    document.body.appendChild(el);
+  }
+  el.textContent = `⚠ ${n} değişiklik buluta gönderilmedi — internet gelince otomatik gönderilir (dokun: şimdi dene)`;
 }
 
 // Yüklenen kalem objesinde eksik tür varsa varsayılan ekle
@@ -317,25 +372,30 @@ function renderBadges() {
 // ============ RENDER: ANA ============
 function renderAna() {
   const hh = state.hareketler.filter(h => h.sezon === state.sezon);
-  let gelir = 0, gider = 0, hasatGelir = 0;
+  // Avans ve borç FİNANSMANDIR — gerçek gelir/gider ve kâr/zarara KATILMAZ. Yoksa
+  // firmadan alınan avans "gelir" görünür ve çiftçi borçluyken "kâr" gösterir.
+  const finansman = h => (h.tur === 'nakit_avans' || h.tur === 'borc');
+  let gelir = 0, gider = 0, hasatGelir = 0, avansBorc = 0;
   hh.forEach(h => {
     const t = parseFloat(h.tutar) || 0;
     if (h.tur === 'hasat') hasatGelir += t;
+    if (finansman(h)) { avansBorc += (h.yon === 'gelir' ? t : -t); return; }
     if (h.yon === 'gelir') gelir += t; else gider += t;
   });
   const net = gelir - gider;
 
-  // En çok harcama yapılan kalem
+  // En çok harcama yapılan kalem (finansman hariç)
+  const giderler = hh.filter(h => h.yon === 'gider' && !finansman(h));
   const kalemMap = {};
-  hh.filter(h => h.yon === 'gider').forEach(h => {
+  giderler.forEach(h => {
     kalemMap[h.kalem] = (kalemMap[h.kalem] || 0) + (parseFloat(h.tutar) || 0);
   });
   const enCokKalem = Object.entries(kalemMap).sort((a, b) => b[1] - a[1])[0];
 
   const stats = [
     { color: 'green', icon: ic.gelir, l: 'Toplam Gelir', v: tl(gelir), s: `${state.sezon} sezonu` },
-    { color: 'red', icon: ic.gider, l: 'Toplam Gider', v: tl(gider), s: hh.filter(h => h.yon === 'gider').length + ' işlem' },
-    { color: net >= 0 ? 'orange' : 'red', icon: ic.wallet, l: 'Net Durum', v: tl(net), s: net >= 0 ? '✓ Kâr' : '⚠ Zarar' },
+    { color: 'red', icon: ic.gider, l: 'Toplam Gider', v: tl(gider), s: giderler.length + ' işlem' },
+    { color: net >= 0 ? 'orange' : 'red', icon: ic.wallet, l: 'Net Durum', v: tl(net), s: (net >= 0 ? '✓ Kâr' : '⚠ Zarar') + (avansBorc ? ' · Avans/Borç ' + tl(avansBorc) : '') },
     { color: 'gold', icon: ic.wheat, l: 'Hasat Geliri', v: hasatGelir > 0 ? tl(hasatGelir) : '—', s: hh.filter(h => h.tur === 'hasat').length + ' hasat' }
   ];
   const gizliIcon = state.gizli
@@ -499,11 +559,13 @@ function renderKisiler() {
 function renderRaporlar() {
   const hh = state.hareketler.filter(h => h.sezon === state.sezon);
 
-  // Genel özet
+  // Genel özet — avans/borç finansmandır, gelir/gider ve kâr/zarara katılmaz
+  const finansman = h => (h.tur === 'nakit_avans' || h.tur === 'borc');
   let totalGelir = 0, totalGider = 0, hasatGelir = 0;
   hh.forEach(h => {
     const t = parseFloat(h.tutar) || 0;
     if (h.tur === 'hasat') hasatGelir += t;
+    if (finansman(h)) return;
     if (h.yon === 'gelir') totalGelir += t; else totalGider += t;
   });
   const totalNet = totalGelir - totalGider;
@@ -511,9 +573,9 @@ function renderRaporlar() {
   const gelirPct = Math.round(totalGelir / maxVal * 100);
   const giderPct = Math.round(totalGider / maxVal * 100);
 
-  // 1. Kalem dağılımı
+  // 1. Kalem dağılımı (finansman hariç)
   const kalemMap = {};
-  hh.filter(h => h.yon === 'gider').forEach(h => {
+  hh.filter(h => h.yon === 'gider' && !finansman(h)).forEach(h => {
     kalemMap[h.kalem] = (kalemMap[h.kalem] || 0) + (parseFloat(h.tutar) || 0);
   });
   const kalemArr = Object.entries(kalemMap).sort((a, b) => b[1] - a[1]);
@@ -844,6 +906,10 @@ async function kaydetHareket() {
   const tutar = parseFloat($('f-tutar').value) || 0;
   const tarih = $('f-tarih').value || today();
   if (!kalem) { toast('Kalem seç'); return; }
+  // Tutar doğrulaması: 0/negatif kayıt engellenir. İstisna: sadece miktar girilen
+  // hasat (stok/depoya giriş) tutarsız kaydedilebilir.
+  const _miktarVar = (parseFloat($('f-miktar').value) || 0) > 0;
+  if (tutar <= 0 && !(tur === 'hasat' && _miktarVar)) { toast('Geçerli bir tutar girin'); return; }
 
   const yon = TUR_YON[tur];
   const data = {
@@ -859,9 +925,12 @@ async function kaydetHareket() {
     kaynak: $('f-kaynak').value || 'cep',
     olusturma: new Date().toISOString()
   };
-  if (tur === 'hammadde') {
+  // Hasat ve hammadde miktar/birim taşır; tutar=miktar×fiyat override'ı yalnızca hammaddede.
+  if (tur === 'hammadde' || tur === 'hasat') {
     data.miktar = parseFloat($('f-miktar').value) || 0;
     data.birim = $('f-birim').value || 'kg';
+  }
+  if (tur === 'hammadde') {
     data.birim_fiyat = parseFloat($('f-birim-fiyat').value) || 0;
     data.tutar = +(data.miktar * data.birim_fiyat).toFixed(2);
   }
@@ -947,7 +1016,9 @@ async function kaydetTarla() {
 window.kaydetTarla = kaydetTarla;
 
 async function silTarla() {
-  if (!confirm('Bu tarlayı silmek istiyor musun?')) return;
+  const bagli = state.hareketler.filter(h => h.tarla_id === state.edit.tarla).length;
+  const uyari = bagli ? `Bu tarlaya bağlı ${bagli} hareket kaydı var; silinince bu kayıtların tarla bilgisi boş kalır. ` : '';
+  if (!confirm(uyari + 'Bu tarlayı silmek istiyor musun?')) return;
   state.tarlalar = state.tarlalar.filter(t => t.id !== state.edit.tarla);
   await persist(KEYS.tarlalar);
   closeTarla();
@@ -998,7 +1069,9 @@ async function kaydetFirma() {
 window.kaydetFirma = kaydetFirma;
 
 async function silFirma() {
-  if (!confirm('Bu firmayı silmek istiyor musun?')) return;
+  const bagli = state.hareketler.filter(h => h.firma_id === state.edit.firma).length;
+  const uyari = bagli ? `Bu firmaya bağlı ${bagli} hareket kaydı var; silinince bu kayıtların firma bilgisi boş kalır. ` : '';
+  if (!confirm(uyari + 'Bu firmayı silmek istiyor musun?')) return;
   state.firmalar = state.firmalar.filter(f => f.id !== state.edit.firma);
   await persist(KEYS.firmalar);
   closeFirma();
@@ -1058,7 +1131,9 @@ async function kaydetKisi() {
 window.kaydetKisi = kaydetKisi;
 
 async function silKisi() {
-  if (!confirm('Bu kişiyi silmek istiyor musun?')) return;
+  const bagli = state.hareketler.filter(h => h.kisi_id === state.edit.kisi).length;
+  const uyari = bagli ? `Bu kişiye bağlı ${bagli} hareket kaydı var; silinince bu kayıtların kişi bilgisi boş kalır. ` : '';
+  if (!confirm(uyari + 'Bu kişiyi silmek istiyor musun?')) return;
   state.kisiler = state.kisiler.filter(k => k.id !== state.edit.kisi);
   await persist(KEYS.kisiler);
   closeKisi();
@@ -1069,11 +1144,15 @@ window.silKisi = silKisi;
 
 // ============ EXPORT/IMPORT ============
 function exportJSON() {
+  let _sezonlar = [];
+  try { _sezonlar = JSON.parse(localStorage.getItem('bt_sezonlar') || '[]'); } catch {}
   const out = {
     bt_firmalar: state.firmalar,
     bt_tarlalar: state.tarlalar,
     bt_kisiler: state.kisiler,
     bt_hareketler: state.hareketler,
+    bt_kalemler: state.kalemler,          // kullanıcının özel kalemleri de yedekte
+    bt_sezonlar: _sezonlar,               // eklenen sezonlar da yedekte
     _meta: { sezon: state.sezon, tarih: new Date().toISOString() }
   };
   const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
@@ -1087,6 +1166,19 @@ function exportJSON() {
 }
 window.exportJSON = exportJSON;
 
+// Önbelleği güvenle temizle: senkronlanmamış veri varsa engelle, yoksa önce yedek indir
+function onbellekTemizle() {
+  if (bekleyenSayisi() > 0) {
+    toast('⚠ Buluta gönderilmemiş değişiklik var — önce internete bağlanın, sonra tekrar deneyin.');
+    return;
+  }
+  if (!confirm('Yerel önbellek silinecek (bulut verisi korunur). Güvenlik için önce YEDEK İNDİRİLECEK. Devam?')) return;
+  try { exportJSON(); } catch (e) {}
+  // Yedek indirmesinin başlamasına fırsat ver, sonra temizle + yeniden yükle (bulut'tan gelir)
+  setTimeout(() => { localStorage.clear(); location.reload(); }, 700);
+}
+window.onbellekTemizle = onbellekTemizle;
+
 function importJSON(input) {
   const f = input.files[0];
   if (!f) return;
@@ -1099,7 +1191,10 @@ function importJSON(input) {
       if (Array.isArray(d.bt_tarlalar)) state.tarlalar = d.bt_tarlalar;
       if (Array.isArray(d.bt_kisiler)) state.kisiler = d.bt_kisiler;
       if (Array.isArray(d.bt_hareketler)) state.hareketler = d.bt_hareketler;
-      await Promise.all([persist(KEYS.firmalar), persist(KEYS.tarlalar), persist(KEYS.kisiler), persist(KEYS.hareketler)]);
+      if (d.bt_kalemler && typeof d.bt_kalemler === 'object') state.kalemler = mergeKalemler(d.bt_kalemler);
+      if (Array.isArray(d.bt_sezonlar)) localStorage.setItem('bt_sezonlar', JSON.stringify(d.bt_sezonlar.map(String)));
+      await Promise.all([persist(KEYS.firmalar), persist(KEYS.tarlalar), persist(KEYS.kisiler), persist(KEYS.hareketler), persist(KEYS.kalemler)]);
+      renderSezonSelect();
       render();
       toast('Yüklendi');
     } catch (err) {
@@ -1149,6 +1244,7 @@ function yeniSezonEkle() {
   try { ek = JSON.parse(localStorage.getItem('bt_sezonlar') || '[]'); } catch {}
   if (!ek.includes(y)) ek.push(y);
   localStorage.setItem('bt_sezonlar', JSON.stringify(ek));
+  supaSet('bt_sezonlar', ek);            // buluta da yaz (telefon değişince kaybolmasın)
   $('yeni-sezon').value = '';
   setSezon(y);
   renderKalemYonet();
