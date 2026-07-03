@@ -975,8 +975,6 @@ async function kaydetHareket() {
   // hasat (stok/depoya giriş) tutarsız kaydedilebilir.
   const _miktarVar = (parseFloat($('f-miktar').value) || 0) > 0;
   if (tutar <= 0 && !(tur === 'hasat' && _miktarVar)) { toast('Geçerli bir tutar girin'); return; }
-  // Firma malı (ayni) ise hangi firmadan geldiği belli olmalı
-  if ($('f-kaynak').value === 'firma' && !$('f-firma').value) { toast('Firma malı için firma seçin'); return; }
 
   const yon = TUR_YON[tur];
   const data = {
