@@ -1,17 +1,12 @@
-// Bedlek Tarım Defteri — Service Worker
-// Amaç: uygulama kabuğunu (index.html, app.js, fontlar) önbelleğe alıp
-// tarlada (çevrimdışı) uygulamanın AÇILABİLMESİNİ sağlamak.
-// NOT: Supabase API çağrıları asla önbelleğe alınmaz — veri her zaman canlı gelir/gider.
+// Bedlek Tarım Defteri — Service Worker (v2)
+// Strateji:
+//  - Uygulama dosyaları (index.html, app.js, manifest): ÖNCE AĞ (network-first)
+//    → online iken HER ZAMAN güncel kod gelir; sadece çevrimdışında önbelleğe düşer.
+//  - Fontlar/ikonlar (çapraz köken + statik): önce önbellek (cache-first).
+//  - Supabase / Drive çağrıları: SW hiç karışmaz (her zaman canlı).
 
-const CACHE = 'bedlek-v1';
-const KABUK = [
-  './',
-  './index.html',
-  './app.js',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
-];
+const CACHE = 'bedlek-v2';
+const KABUK = ['./', './index.html', './app.js', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(KABUK)).then(() => self.skipWaiting()));
@@ -26,24 +21,39 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET') return;                 // yalnızca GET
+  if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  // Supabase veri çağrıları: her zaman ağdan (önbelleğe ALMA) — bayat veri riski olmasın
-  if (url.hostname.endsWith('supabase.co')) return;
+  // Veri / yedek çağrıları: SW karışmaz (her zaman ağdan, bayat veri riski olmasın)
+  if (url.hostname.endsWith('supabase.co') ||
+      url.hostname.endsWith('script.google.com') ||
+      url.hostname.endsWith('googleusercontent.com')) return;
 
-  // Uygulama kabuğu + fontlar: önce önbellek, yoksa ağdan çek ve önbelleğe ekle
+  // Aynı köken uygulama dosyaları: ÖNCE AĞ (güncel kod), başarısızsa önbellek
+  if (url.origin === self.location.origin) {
+    e.respondWith(
+      fetch(req).then((res) => {
+        if (res && res.ok) {
+          const kopya = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, kopya)).catch(() => {});
+        }
+        return res;
+      }).catch(() => caches.match(req).then((hit) => hit || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // Çapraz köken (fontlar vb.): önce önbellek, yoksa ağdan çek + önbelleğe ekle
   e.respondWith(
     caches.match(req).then((hit) => {
       if (hit) return hit;
       return fetch(req).then((res) => {
-        // Başarılı yanıtları (aynı köken + fontlar) önbelleğe kopyala
         if (res && (res.ok || res.type === 'opaque')) {
           const kopya = res.clone();
           caches.open(CACHE).then((c) => c.put(req, kopya)).catch(() => {});
         }
         return res;
-      }).catch(() => caches.match('./index.html'));  // çevrimdışı gezinme için
+      });
     })
   );
 });

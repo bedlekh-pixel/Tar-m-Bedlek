@@ -1034,6 +1034,11 @@ a{color:inherit;text-decoration:none}
 <script>
   // Service worker — tarlada (çevrimdışı) uygulamanın açılabilmesi için
   if ('serviceWorker' in navigator) {
+    // Yeni sürüm devralınca sayfayı bir kez otomatik yenile (güncellemeler hemen görünür)
+    let _yenileniyor = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (_yenileniyor) return; _yenileniyor = true; location.reload();
+    });
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW kayıt hatası', err));
     });
