@@ -490,7 +490,7 @@ function renderTarlalar() {
           ${t.urun ? `<span class="chip green">🌾 ${escapeHtml(t.urun)}</span>` : ''}
           <span class="chip ${t.modul === 'sozlesmeli' ? 'orange' : 'gold'}">${t.modul === 'sozlesmeli' ? 'Sözleşmeli' : 'Şahsi'}</span>
           ${firma ? `<span class="chip blue">🏢 ${escapeHtml(firma.ad)}</span>` : ''}
-          ${hasHasat ? `<span class="chip green">🌾 ${tl0(kz.hasat.miktar)} ${kz.hasat.birim || ''}</span>` : ''}
+          ${hasHasat ? `<span class="chip green">🌾 ${tl0(kz.hasat.miktar)} ${kz.hasat.birim || ''}${t.dekar > 0 && kz.hasat.miktar > 0 ? ' · ' + tl0(kz.hasat.miktar / t.dekar) + '/dk verim' : ''}</span>` : ''}
         </div>
         <div class="tarla-cost">
           <div>
@@ -606,11 +606,37 @@ function renderRaporlar() {
   });
   const urunArr = Object.entries(urunMap).sort((a, b) => b[1].maliyet - a[1].maliyet);
 
+  // 6. Aylık gider (bu sezon, finansman hariç)
+  const AY_AD = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+  const ayGider = {};
+  hh.forEach(h => {
+    if (h.yon !== 'gider' || finansman(h)) return;
+    const ay = (h.tarih || '').slice(0, 7);
+    if (ay) ayGider[ay] = (ayGider[ay] || 0) + (parseFloat(h.tutar) || 0);
+  });
+  const ayArr = Object.entries(ayGider).sort((a, b) => a[0].localeCompare(b[0]));
+  const ayMax = Math.max(1, ...ayArr.map(([, v]) => v));
+
+  // 7. Sezon karşılaştırma (tüm sezonlar, finansman hariç)
+  const sezonlarSet = Array.from(new Set(state.hareketler.map(h => String(h.sezon)).filter(Boolean))).sort();
+  const sezonR = sezonlarSet.map(sz => {
+    let g = 0, gd = 0;
+    state.hareketler.forEach(h => {
+      if (String(h.sezon) !== sz || finansman(h)) return;
+      const t = parseFloat(h.tutar) || 0;
+      if (h.yon === 'gelir') g += t; else gd += t;
+    });
+    return { sezon: sz, gelir: g, gider: gd, net: g - gd };
+  });
+
   $('reports').innerHTML = `
     <div class="report-card fade-in" style="grid-column:1/-1;background:linear-gradient(135deg,var(--paper) 0%,var(--paper-2) 100%);border:none;padding:24px">
       <div class="report-h">
         <h3 style="font-size:18px">📊 ${state.sezon} Sezonu — Genel Bilanço</h3>
-        <button class="btn btn-ghost btn-sm" onclick="toggleGizli()">${state.gizli ? 'Göster' : 'Gizle'}</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="yazdirRapor()">🖨️ Yazdır</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleGizli()">${state.gizli ? 'Göster' : 'Gizle'}</button>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:18px">
         <div style="background:var(--forest-l);padding:14px;border-radius:var(--r);border-left:4px solid var(--forest)">
@@ -701,6 +727,33 @@ function renderRaporlar() {
         </div>
       `).join('') : '<div style="color:var(--muted);font-size:13px">Veri yok</div>'}
     </div>
+
+    <div class="report-card fade-in">
+      <div class="report-h"><h3>📈 Aylık Gider</h3><span class="chip">${state.sezon}</span></div>
+      ${ayArr.length ? `<div style="display:flex;align-items:flex-end;gap:5px;padding-top:8px;min-height:130px">
+        ${ayArr.map(([ay, v]) => {
+          const hpx = Math.max(6, Math.round(v / ayMax * 110));
+          const ayNo = parseInt(ay.slice(5, 7), 10);
+          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:5px;min-width:0">
+            <div style="width:100%;height:${hpx}px;border-radius:6px 6px 0 0;background:linear-gradient(180deg,var(--red) 0%,var(--orange) 100%)" title="${AY_AD[ayNo - 1] || ay}: ${tl(v)}"></div>
+            <div style="font-size:10px;color:var(--muted)">${AY_AD[ayNo - 1] || ''}</div>
+          </div>`;
+        }).join('')}
+      </div>` : '<div style="color:var(--muted);font-size:13px">Bu sezonda gider yok</div>'}
+    </div>
+
+    ${sezonR.length > 1 ? `<div class="report-card fade-in">
+      <div class="report-h"><h3>📅 Sezon Karşılaştırma</h3></div>
+      ${sezonR.map(s => `
+        <div class="report-row" style="display:block">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="font-weight:700${s.sezon === state.sezon ? ';color:var(--forest)' : ''}">${s.sezon}${s.sezon === state.sezon ? ' ●' : ''}</span>
+            <b style="color:${s.net >= 0 ? 'var(--forest)' : 'var(--red)'}">${tl(s.net)}</b>
+          </div>
+          <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">gelir ${tl(s.gelir)} · gider ${tl(s.gider)}</div>
+        </div>
+      `).join('')}
+    </div>` : ''}
   `;
 }
 
@@ -1205,6 +1258,13 @@ async function driveYedekle(zorla) {
   }
 }
 window.driveYedekle = driveYedekle;
+
+// Raporu yazdır / PDF olarak kaydet (tarayıcı yazdır → "PDF olarak kaydet")
+function yazdirRapor() {
+  goView('raporlar');
+  setTimeout(() => window.print(), 250);
+}
+window.yazdirRapor = yazdirRapor;
 
 // Önbelleği güvenle temizle: senkronlanmamış veri varsa engelle, yoksa önce yedek indir
 function onbellekTemizle() {
