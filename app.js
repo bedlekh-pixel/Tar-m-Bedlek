@@ -7,6 +7,10 @@ const SB_URL = 'https://rgposasyazoethintugo.supabase.co';
 const SB_KEY = 'sb_publishable_JjvXp9W8tumdzbZ0TC6CAw_XNFTGGG7';
 const SB_HEAD = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
 
+// Google Drive otomatik yedek (Apps Script web app) — bağımsız 3. katman
+const DRIVE_YEDEK_URL = 'https://script.google.com/macros/s/AKfycbwZg052KlMQYz999ElvC6bbuYAuPQwdF4EsX5yvg7jSiN74BYMkJYOu8sOVFML1W73C/exec';
+const DRIVE_GIZLI = 'BEDLEK2026';   // Apps Script'teki GIZLI ile aynı olmalı
+
 const KEYS = {
   firmalar: 'bt_firmalar',
   tarlalar: 'bt_tarlalar',
@@ -190,6 +194,7 @@ async function loadAll() {
   syncBanner();
   showLoading(false);
   render();
+  if (navigator.onLine) driveYedekle();   // günde 1 kez otomatik Drive yedeği (3. katman)
 }
 
 // ---- Bekleyen (buluta gönderilememiş) yazma yönetimi ----
@@ -1165,6 +1170,41 @@ function exportJSON() {
   toast('Yedek indirildi');
 }
 window.exportJSON = exportJSON;
+
+// Google Drive'a otomatik yedek gönder (günde 1 kez; zorla=true ile elle).
+// Apps Script CORS başlığı döndürmediği için no-cors + text/plain kullanılır
+// (Apps Script tarafı e.postData.contents'i JSON.parse eder).
+async function driveYedekle(zorla) {
+  if (!DRIVE_YEDEK_URL) return;
+  const son = parseInt(localStorage.getItem('bt_son_drive_yedek') || '0', 10);
+  const birGun = 24 * 60 * 60 * 1000;
+  if (!zorla && (Date.now() - son) < birGun) return;   // günde en fazla 1 otomatik yedek
+  if (zorla) toast('Drive yedeği gönderiliyor…');
+  try {
+    let sezonlar = [];
+    try { sezonlar = JSON.parse(localStorage.getItem('bt_sezonlar') || '[]'); } catch {}
+    const payload = {
+      _gizli: DRIVE_GIZLI,
+      bt_firmalar: state.firmalar, bt_tarlalar: state.tarlalar,
+      bt_kisiler: state.kisiler, bt_hareketler: state.hareketler,
+      bt_kalemler: state.kalemler, bt_sezonlar: sezonlar,
+      _meta: { sezon: state.sezon, tarih: new Date().toISOString() }
+    };
+    await fetch(DRIVE_YEDEK_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    localStorage.setItem('bt_son_drive_yedek', String(Date.now()));
+    if (zorla) toast('✓ Drive yedeği gönderildi');
+    console.log('Drive yedek gönderildi');
+  } catch (e) {
+    console.warn('Drive yedek hata', e);
+    if (zorla) toast('⚠ Drive yedeği gönderilemedi');
+  }
+}
+window.driveYedekle = driveYedekle;
 
 // Önbelleği güvenle temizle: senkronlanmamış veri varsa engelle, yoksa önce yedek indir
 function onbellekTemizle() {
