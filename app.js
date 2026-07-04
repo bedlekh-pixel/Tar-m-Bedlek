@@ -312,14 +312,17 @@ function firmaHesap(firmaId) {
   return { avans, harcanan, kalan: avans - harcanan, gelir, firmaMali, borc: avans + firmaMali };
 }
 
+// Kişi bakiyesi = YALNIZCA borç/alacak (tüm sezonlar — borç süregider).
+// Ödenen işçilik/harcama bakiyeye girmez (o zaten ödenmiş gider).
+// bakiye > 0 → kişi bize borçlu (alacak) · < 0 → biz kişiye borçluyuz
 function kisiBakiye(kisiId) {
   const hh = state.hareketler.filter(h => h.kisi_id === kisiId);
   let bakiye = 0;
   hh.forEach(h => {
+    if (h.tur !== 'borc') return;
     const t = parseFloat(h.tutar) || 0;
-    if (h.tur === 'borc' && h.kalem === 'Borç (Verilen)') bakiye += t;       // bize borçlu
-    else if (h.tur === 'borc' && h.kalem === 'Borç (Alınan)') bakiye -= t;   // biz borçluyuz
-    else if (h.yon === 'gider') bakiye += t;                                  // ödenecek (alacaklı)
+    if (h.kalem === 'Borç (Verilen)') bakiye += t;       // ona verdik → o bize borçlu
+    else if (h.kalem === 'Borç (Alınan)') bakiye -= t;   // ondan aldık → biz ona borçluyuz
   });
   return bakiye;
 }
@@ -374,9 +377,13 @@ function openKisiDetay(id) {
   $('detay-title').textContent = k.ad;
   $('detay-sub').textContent = k.tur + (k.telefon ? ' · ' + k.telefon : '');
   $('detay-stats').innerHTML =
-    statBlok('Verilen', tl(verilen), 'red') +
+    statBlok('Ödenen', tl(verilen), 'red') +
     statBlok('Alınan', tl(alinan), 'green') +
-    statBlok(bakiye >= 0 ? 'Alacaklı' : 'Borçlu', (bakiye >= 0 ? '+' : '') + tl(bakiye), bakiye >= 0 ? 'green' : 'red');
+    statBlok(
+      bakiye > 0 ? 'Bize borçlu' : (bakiye < 0 ? 'Biz borçluyuz' : 'Hesap temiz'),
+      bakiye === 0 ? '—' : tl(Math.abs(bakiye)),
+      bakiye > 0 ? 'green' : (bakiye < 0 ? 'red' : '')
+    );
   $('detay-tx').innerHTML = hareketler.length
     ? hareketler.map((hh, i) => txCard(hh, i)).join('')
     : emptyState('Hareket yok', 'Bu kişi için henüz kayıt eklenmemiş.');
@@ -440,6 +447,34 @@ function renderAna() {
       <div class="stat-v">${s.v}</div>
       <div class="stat-s">${s.s}</div>
     </div>`).join('');
+
+  // ── Yaklaşan / hatırlatıcılar: borç vadeleri + beklenen hasat ──
+  const _bugun = today();
+  const _gun = (t) => Math.round((new Date(t) - new Date(_bugun)) / 86400000);
+  const hatir = [];
+  state.hareketler.forEach(h => {
+    if (h.tur === 'borc' && h.vade) {
+      const kim = kisiAd(h.kisi_id) || firmaAd(h.firma_id) || '';
+      const ne = h.kalem === 'Borç (Verilen)' ? 'tahsilat' : 'ödeme';
+      hatir.push({ tip: '💰', ad: (kim ? kim + ' — ' : '') + ne, tutar: parseFloat(h.tutar) || 0, tarih: h.vade, gun: _gun(h.vade) });
+    }
+  });
+  state.tarlalar.forEach(t => {
+    if (t.hasat_tarihi) hatir.push({ tip: '🌾', ad: (t.ad || 'Tarla') + ' — beklenen hasat', tutar: 0, tarih: t.hasat_tarihi, gun: _gun(t.hasat_tarihi) });
+  });
+  const yaklasan = hatir.filter(x => !isNaN(x.gun) && x.gun <= 30).sort((a, b) => a.gun - b.gun);
+  $('ana-hatirlatici').innerHTML = yaklasan.length ? `
+    <div class="card" style="margin:18px 0 4px;border-left:4px solid var(--orange)">
+      <div style="font-family:var(--font-display);font-size:15px;font-weight:700;margin-bottom:6px">⏰ Yaklaşan / Hatırlatıcılar</div>
+      ${yaklasan.map(x => {
+        const renk = x.gun < 0 ? 'var(--red)' : (x.gun <= 7 ? 'var(--orange)' : 'var(--muted)');
+        const durum = x.gun < 0 ? Math.abs(x.gun) + ' gün geçti' : (x.gun === 0 ? 'bugün' : x.gun + ' gün kaldı');
+        return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13px">
+          <span>${x.tip} ${escapeHtml(x.ad)}${x.tutar ? ' · ' + tl(x.tutar) : ''}</span>
+          <span style="color:${renk};font-weight:700;font-size:12px;white-space:nowrap;text-align:right">${fd(x.tarih)}<br>${durum}</span>
+        </div>`;
+      }).join('')}
+    </div>` : '';
 
   // Son hareketler
   const son = [...hh].sort((a, b) => (b.olusturma || '').localeCompare(a.olusturma || '')).slice(0, 8);
@@ -581,7 +616,7 @@ function renderKisiler() {
           <div class="kisi-ad">${escapeHtml(k.ad)}</div>
           <div class="kisi-tur">${k.tur}</div>
         </div>
-        ${bakiye !== 0 ? `<div class="kisi-bakiye ${bakiye > 0 ? 'alacak' : 'borc'}">${bakiye > 0 ? '+' : ''}${tl(bakiye)}</div>` : ''}
+        ${bakiye !== 0 ? `<div class="kisi-bakiye ${bakiye > 0 ? 'alacak' : 'borc'}" style="text-align:right">${tl(Math.abs(bakiye))}<div style="font-size:9px;font-weight:600;opacity:.85">${bakiye > 0 ? 'bize borçlu' : 'borçluyuz'}</div></div>` : ''}
       </div>`;
   }).join('') : emptyState('Kişi yok', '+ Kişi butonuna bas.');
 }
@@ -890,6 +925,7 @@ function openHareket() {
   $('f-birim-fiyat').value = '';
   $('f-toplam-goster').textContent = '0 ₺';
   $('f-tarih').value = today();
+  $('f-vade').value = '';
   $('f-aciklama').value = '';
   $('f-firma').value = '';
   $('f-tarla').value = '';
@@ -941,6 +977,7 @@ function updateForm() {
   $('row-tarla').style.display = (tur === 'harcama' || isHammadde || isHasat) ? 'block' : 'none';
   $('row-kisi').style.display = (tur !== 'nakit_avans') ? 'block' : 'none';
   $('row-kaynak').style.display = (tur === 'harcama' || isHammadde) ? 'block' : 'none';
+  $('row-vade').style.display = isBorc ? 'block' : 'none';
   if (isHammadde) updateHammaddeToplam();
 }
 window.updateForm = updateForm;
@@ -988,6 +1025,7 @@ function duzenleHareket(id) {
   $('f-kalem').value = h.kalem || '';
   $('f-tutar').value = h.tutar || '';
   $('f-tarih').value = h.tarih || today();
+  $('f-vade').value = h.vade || '';
   $('f-miktar').value = h.miktar || '';
   $('f-birim').value = h.birim || 'kg';
   $('f-birim-fiyat').value = h.birim_fiyat || (h.miktar ? +(h.tutar / h.miktar).toFixed(2) : '');
@@ -1024,6 +1062,7 @@ async function kaydetHareket() {
     tarla_id: $('f-tarla').value || '',
     kisi_id: $('f-kisi').value || '',
     kaynak: $('f-kaynak').value || 'cep',
+    vade: (tur === 'borc') ? ($('f-vade').value || '') : '',   // borç vadesi
     olusturma: new Date().toISOString()
   };
   // Hasat ve hammadde miktar/birim taşır; tutar=miktar×fiyat override'ı yalnızca hammaddede.
@@ -1064,7 +1103,7 @@ function openTarla() {
   state.edit.tarla = null;
   $('tarla-title').textContent = 'Yeni Tarla';
   $('btn-sil-t').style.display = 'none';
-  ['t-ad', 't-urun', 't-dekar', 't-sahip'].forEach(i => $(i).value = '');
+  ['t-ad', 't-urun', 't-dekar', 't-sahip', 't-ekim', 't-hasat'].forEach(i => $(i).value = '');
   $('t-modul').value = 'sahsi';
   populateSelects();
   $('t-firma').value = '';
@@ -1083,6 +1122,8 @@ function duzenleTarla(id) {
   $('t-urun').value = t.urun || '';
   $('t-dekar').value = t.dekar || '';
   $('t-sahip').value = t.sahip || '';
+  $('t-ekim').value = t.ekim_tarihi || '';
+  $('t-hasat').value = t.hasat_tarihi || '';
   $('t-modul').value = t.modul || 'sahsi';
   populateSelects();
   $('t-firma').value = t.firma_id || '';
@@ -1099,6 +1140,8 @@ async function kaydetTarla() {
     urun: $('t-urun').value || '',
     dekar: parseFloat($('t-dekar').value) || 0,
     sahip: $('t-sahip').value || '',
+    ekim_tarihi: $('t-ekim').value || '',
+    hasat_tarihi: $('t-hasat').value || '',
     modul: $('t-modul').value || 'sahsi',
     firma_id: $('t-firma').value || '',
     sezon: state.sezon
