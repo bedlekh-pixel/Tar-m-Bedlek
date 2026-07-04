@@ -21,7 +21,7 @@ const KEYS = {
 
 // Varsayılan kalemler — kullanıcı silmediği sürece görünür
 const VARSAYILAN_KALEMLER = {
-  harcama: ['İşçilik', 'Tarla Kirası', 'Kepçe/İş Makinası', 'Servis Ücreti', 'Nakliye/Taşıma', 'Borç (Verilen)', 'Diğer'],
+  harcama: ['İşçilik', 'Tarla Kirası', 'Kepçe/İş Makinası', 'Servis Ücreti', 'Nakliye/Taşıma', 'Borç (Verilen)', 'Firma Ödemesi', 'Diğer'],
   hammadde: ['Tohum', 'Gübre', 'İlaç', 'Mazot', 'Diğer'],
   nakit_avans: ['Nakit Avans'],
   borc: ['Borç (Verilen)', 'Borç (Alınan)'],
@@ -256,8 +256,13 @@ function syncBanner() {
 function mergeKalemler(loaded) {
   const out = {};
   Object.keys(VARSAYILAN_KALEMLER).forEach(tur => {
-    out[tur] = Array.isArray(loaded[tur]) ? loaded[tur] : VARSAYILAN_KALEMLER[tur].slice();
+    out[tur] = Array.isArray(loaded[tur]) ? loaded[tur].slice() : VARSAYILAN_KALEMLER[tur].slice();
   });
+  // Sistem kalemi — eski kullanıcılarda da mutlaka bulunsun (firma borç kapatma)
+  if (out.harcama && !out.harcama.includes('Firma Ödemesi')) {
+    const i = out.harcama.indexOf('Diğer');
+    if (i >= 0) out.harcama.splice(i, 0, 'Firma Ödemesi'); else out.harcama.push('Firma Ödemesi');
+  }
   return out;
 }
 
@@ -267,7 +272,7 @@ function harcamaToplam(h) { return (parseFloat(h.tutar) || 0); }
 // Tarla NAKİT maliyeti — cepten/şahsi + avanstan çıkan. Firma malı (ayni) HARİÇ.
 function tarlaMaliyeti(tarlaId) {
   return state.hareketler
-    .filter(h => h.tarla_id === tarlaId && h.yon === 'gider' && h.sezon === state.sezon && h.kaynak !== 'firma')
+    .filter(h => h.tarla_id === tarlaId && h.yon === 'gider' && h.sezon === state.sezon && h.kaynak !== 'firma' && h.kalem !== 'Firma Ödemesi')
     .reduce((s, h) => s + harcamaToplam(h), 0);
 }
 
@@ -300,16 +305,17 @@ function tarlaKarZarar(tarlaId) {
 
 function firmaHesap(firmaId) {
   const hh = state.hareketler.filter(h => h.firma_id === firmaId && h.sezon === state.sezon);
-  let avans = 0, harcanan = 0, gelir = 0, firmaMali = 0;
+  let avans = 0, harcanan = 0, gelir = 0, firmaMali = 0, odenen = 0;
   hh.forEach(h => {
     const t = parseFloat(h.tutar) || 0;
-    if (h.tur === 'nakit_avans') avans += t;
+    if (h.kalem === 'Firma Ödemesi') odenen += t;               // firmaya ödeme → borcu azaltır
+    else if (h.tur === 'nakit_avans') avans += t;
     else if (h.kaynak === 'firma') firmaMali += t;              // firmadan AYNİ gelen mal (ilaç, gübre vb.)
     else if (h.kaynak === 'avans') harcanan += t;
     else if (h.yon === 'gelir' && h.tur !== 'nakit_avans') gelir += t;
   });
-  // Firmaya toplam borç = alınan nakit avans + ayni mal (ikisi de firmadan alındı, ödenecek)
-  return { avans, harcanan, kalan: avans - harcanan, gelir, firmaMali, borc: avans + firmaMali };
+  // Ayni mal kalan borcu = firmadan gelen mal − yapılan ödemeler (avans havuzu ayrı)
+  return { avans, harcanan, kalan: avans - harcanan, gelir, firmaMali, odenen, borc: firmaMali - odenen };
 }
 
 // Kişi bakiyesi = YALNIZCA borç/alacak (tüm sezonlar — borç süregider).
@@ -351,7 +357,9 @@ function openFirmaDetay(id) {
     statBlok('Avans Alındı', tl(h.avans), 'green') +
     statBlok('Harcanan', tl(h.harcanan), 'red') +
     statBlok('Kalan', tl(h.kalan), 'orange') +
-    (h.firmaMali > 0 ? statBlok('Firma Malı (ayni)', tl(h.firmaMali), 'orange') : '');
+    (h.firmaMali > 0 ? statBlok('Firma Malı (ayni)', tl(h.firmaMali), 'orange') : '') +
+    (h.odenen > 0 ? statBlok('Firmaya Ödenen', tl(h.odenen), 'green') : '') +
+    ((h.firmaMali > 0 || h.odenen > 0) ? statBlok('Kalan Firma Borcu', tl(h.borc), h.borc > 0 ? 'red' : 'green') : '');
   $('detay-tx').innerHTML = hareketler.length
     ? hareketler.map((hh, i) => txCard(hh, i)).join('')
     : emptyState('Hareket yok', 'Bu firma için bu sezon henüz kayıt eklenmemiş.');
@@ -412,14 +420,15 @@ function renderAna() {
   hh.forEach(h => {
     const t = parseFloat(h.tutar) || 0;
     if (h.tur === 'hasat') hasatGelir += t;
+    if (h.kalem === 'Firma Ödemesi') return;                 // firma borç kapatma → gider değil (çift sayma önlenir)
     if (h.kaynak === 'firma') { firmaMaliT += t; return; }   // firma malı: bizim giderimiz değil (firmaya borç)
     if (finansman(h)) { avansBorc += (h.yon === 'gelir' ? t : -t); return; }
     if (h.yon === 'gelir') gelir += t; else gider += t;
   });
   const net = gelir - gider;
 
-  // En çok harcama yapılan kalem (finansman + firma malı hariç)
-  const giderler = hh.filter(h => h.yon === 'gider' && !finansman(h) && h.kaynak !== 'firma');
+  // En çok harcama yapılan kalem (finansman + firma malı + firma ödemesi hariç)
+  const giderler = hh.filter(h => h.yon === 'gider' && !finansman(h) && h.kaynak !== 'firma' && h.kalem !== 'Firma Ödemesi');
   const kalemMap = {};
   giderler.forEach(h => {
     kalemMap[h.kalem] = (kalemMap[h.kalem] || 0) + (parseFloat(h.tutar) || 0);
@@ -589,9 +598,11 @@ function renderFirmalar() {
             <div class="firma-stat-l">Kalan</div>
             <div class="firma-stat-v orange">${tl(h.kalan)}</div>
           </div>
-          ${h.firmaMali > 0 ? `<div class="firma-stat" style="grid-column:1/-1">
-            <div class="firma-stat-l">Firma Malı (ayni)</div>
-            <div class="firma-stat-v orange">${tl(h.firmaMali)}</div>
+          ${(h.firmaMali > 0 || h.odenen > 0) ? `<div class="firma-stat" style="grid-column:1/-1">
+            <div class="firma-stat-l">Firma Malı · Ödenen · Kalan Borç</div>
+            <div class="firma-stat-v" style="font-size:13px">
+              <span class="orange">${tl0(h.firmaMali)}</span> / <span class="green">${tl0(h.odenen)}</span> / <span class="${h.borc > 0 ? 'red' : 'green'}">${tl0(h.borc)}</span>
+            </div>
           </div>` : ''}
         </div>
       </div>`;
@@ -632,6 +643,7 @@ function renderRaporlar() {
   hh.forEach(h => {
     const t = parseFloat(h.tutar) || 0;
     if (h.tur === 'hasat') hasatGelir += t;
+    if (h.kalem === 'Firma Ödemesi') return;                 // firma borç kapatma → gider değil (çift sayma önlenir)
     if (h.kaynak === 'firma') { firmaMaliT += t; return; }   // firma malı: bizim giderimiz değil (firmaya borç)
     if (finansman(h)) return;
     if (h.yon === 'gelir') totalGelir += t; else totalGider += t;
@@ -643,7 +655,7 @@ function renderRaporlar() {
 
   // 1. Kalem dağılımı (finansman + firma malı hariç)
   const kalemMap = {};
-  hh.filter(h => h.yon === 'gider' && !finansman(h) && h.kaynak !== 'firma').forEach(h => {
+  hh.filter(h => h.yon === 'gider' && !finansman(h) && h.kaynak !== 'firma' && h.kalem !== 'Firma Ödemesi').forEach(h => {
     kalemMap[h.kalem] = (kalemMap[h.kalem] || 0) + (parseFloat(h.tutar) || 0);
   });
   const kalemArr = Object.entries(kalemMap).sort((a, b) => b[1] - a[1]);
