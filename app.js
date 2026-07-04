@@ -705,6 +705,27 @@ function renderRaporlar() {
     return { sezon: sz, gelir: g, gider: gd, net: g - gd };
   });
 
+  // 8. Depo / Stok — ürün bazında: hasat girdi − satılan = kalan (bu sezon)
+  const tarlaUrun = {};
+  state.tarlalar.forEach(t => { tarlaUrun[t.id] = (t.urun || 'Belirsiz').trim() || 'Belirsiz'; });
+  const stokMap = {};
+  hh.forEach(h => {
+    const m = parseFloat(h.miktar) || 0;
+    if (!m) return;
+    const urun = tarlaUrun[h.tarla_id] || 'Belirsiz';
+    if (!stokMap[urun]) stokMap[urun] = { giren: 0, satilan: 0, birim: h.birim || '' };
+    if (h.tur === 'hasat') {
+      stokMap[urun].giren += m;
+      if (h.kalem === 'Hasat & Satış') stokMap[urun].satilan += m;   // hasatta satıldı → stokta kalmaz
+    } else if (h.tur === 'gelir') {
+      stokMap[urun].satilan += m;                                     // stoktan satış
+    }
+    if (h.birim && !stokMap[urun].birim) stokMap[urun].birim = h.birim;
+  });
+  const stokArr = Object.entries(stokMap)
+    .filter(([, x]) => x.giren > 0 || x.satilan > 0)
+    .sort((a, b) => (b[1].giren - b[1].satilan) - (a[1].giren - a[1].satilan));
+
   $('reports').innerHTML = `
     <div class="report-card fade-in" style="grid-column:1/-1;background:linear-gradient(135deg,var(--paper) 0%,var(--paper-2) 100%);border:none;padding:24px">
       <div class="report-h">
@@ -815,6 +836,20 @@ function renderRaporlar() {
           <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">ayni mal · firmaya toplam borç ${tl(borc)}</div>
         </div>
       `).join('')}
+    </div>` : ''}
+
+    ${stokArr.length ? `<div class="report-card fade-in">
+      <div class="report-h"><h3>📦 Depo / Stok</h3><span class="chip">${state.sezon}</span></div>
+      ${stokArr.map(([urun, x]) => {
+        const kalan = x.giren - x.satilan;
+        return `<div class="report-row" style="display:block">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="font-weight:600">${escapeHtml(urun)}</span>
+            <b style="color:${kalan > 0 ? 'var(--forest)' : 'var(--muted)'}">${tl0(kalan)} ${escapeHtml(x.birim)} kaldı</b>
+          </div>
+          <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">hasat ${tl0(x.giren)} · satılan ${tl0(x.satilan)} ${escapeHtml(x.birim)}</div>
+        </div>`;
+      }).join('')}
     </div>` : ''}
 
     <div class="report-card fade-in">
@@ -982,11 +1017,12 @@ function updateForm() {
   const isHasat = tur === 'hasat';
   const isBorc = tur === 'borc';
   const isAvans = tur === 'nakit_avans';
-  $('row-miktar').style.display = (isHammadde || isHasat) ? 'grid' : 'none';
+  const isGelir = tur === 'gelir';
+  $('row-miktar').style.display = (isHammadde || isHasat || isGelir) ? 'grid' : 'none';
   $('row-birimfiyat').style.display = isHammadde ? 'grid' : 'none';
   $('field-tutar').style.display = isHammadde ? 'none' : 'block';
   $('row-firma').style.display = (isAvans || tur === 'harcama' || isHammadde || isHasat) ? 'block' : 'none';
-  $('row-tarla').style.display = (tur === 'harcama' || isHammadde || isHasat) ? 'block' : 'none';
+  $('row-tarla').style.display = (tur === 'harcama' || isHammadde || isHasat || isGelir) ? 'block' : 'none';
   $('row-kisi').style.display = (tur !== 'nakit_avans') ? 'block' : 'none';
   $('row-kaynak').style.display = (tur === 'harcama' || isHammadde) ? 'block' : 'none';
   $('row-vade').style.display = isBorc ? 'block' : 'none';
@@ -1077,8 +1113,8 @@ async function kaydetHareket() {
     vade: (tur === 'borc') ? ($('f-vade').value || '') : '',   // borç vadesi
     olusturma: new Date().toISOString()
   };
-  // Hasat ve hammadde miktar/birim taşır; tutar=miktar×fiyat override'ı yalnızca hammaddede.
-  if (tur === 'hammadde' || tur === 'hasat') {
+  // Hammadde/hasat/gelir miktar/birim taşır (stok takibi için); fiyat override yalnızca hammaddede.
+  if (tur === 'hammadde' || tur === 'hasat' || tur === 'gelir') {
     data.miktar = parseFloat($('f-miktar').value) || 0;
     data.birim = $('f-birim').value || 'kg';
   }
